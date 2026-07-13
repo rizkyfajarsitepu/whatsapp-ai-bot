@@ -10,7 +10,7 @@ import { handleRemoveBg } from './features/removeBg.js';
 import { handleImageToPdf } from './features/imageToPdf.js';
 import { handleQR, handleShort, handleHitung } from './features/utilities.js';
 import { handleSholat, handleCuaca, handleKurs, handleCrypto } from './features/infoApi.js';
-import { handleMenu } from './features/menu.js';
+import { handleMenu, getMenuText } from './features/menu.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
@@ -33,12 +33,33 @@ const commands = {
   help: handleMenu,
 };
 
+const knownUsers = new Set();
+
+async function handleWelcome(sock, chatId, senderName) {
+  if (knownUsers.has(chatId)) return false;
+
+  knownUsers.add(chatId);
+
+  const welcomeText =
+    `Halo *${senderName}*! 👋\n` +
+    `Selamat datang di *${config.BOT_NAME}*.\n\n` +
+    `Saya adalah bot WhatsApp yang bisa bantu kamu dengan banyak hal.\n\n` +
+    `Ketik *!menu* untuk melihat semua fitur yang tersedia.\n` +
+    `Atau langsung kirim pesan biasa untuk chat dengan AI.`;
+
+  await sock.sendMessage(chatId, { text: welcomeText });
+  logger.info({ jid: chatId, sender: senderName }, 'Welcome message terkirim');
+  return true;
+}
+
 async function handleMessage(sock, msg) {
   const chatId = msg.key.remoteJid;
   const senderName = msg.pushName || 'User';
   const text = getTextContent(msg);
 
   if (!text) return;
+
+  await handleWelcome(sock, chatId, senderName);
 
   const { cmd, args } = getCommand(text);
 

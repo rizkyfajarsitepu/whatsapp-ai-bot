@@ -1,22 +1,75 @@
+import { config } from '../config/settings.js';
+import logger from '../utils/logger.js';
+
 export function getMenuText() {
-  return `*[ ${'*'} RYZARSAI BOT MENU ${'*'} ]\n\n` +
+  return (
+    `╔══════════════════════╗\n` +
+    `║  *${config.BOT_NAME} MENU*  ║\n` +
+    `╚══════════════════════╝\n\n` +
 
-    `💬 Kirim pesan apa saja → AI Auto-reply\n\n` +
-    `🖼️ !stiker / !s → Gambar ke Stiker\n` +
-    `🔊 !tts <teks> → Text to Speech (Voice Note)\n` +
-    `🎙️ !transkrip → Transkripsi Voice Note\n\n` +
-    `📥 !dl <link> → Download YouTube/TikTok/IG/FB\n` +
-    `✂️ !hapusbg → Hapus Background Gambar\n` +
-    `📄 !kepdf → Gambar ke PDF\n\n` +
-    `📱 !qr <teks> → Generate QR Code\n` +
-    `🔗 !short <url> → URL Shortener\n` +
-    `🧮 !hitung <ekspresi> → Kalkulator\n` +
-    `🕐 !sholat <kota> → Jadwal Sholat\n` +
-    `🌤️ !cuaca <kota> → Info Cuaca\n` +
-    `💱 !kurs <dari> <ke> <jumlah> → Kurs Mata Uang\n` +
-    `🪙 !crypto <koin> → Harga Kripto\n\n` +
+    `┌──────────────────────┐\n` +
+    `│  *AI & CHAT*          │\n` +
+    `├──────────────────────┤\n` +
+    `│ 💬 Kirim pesan biasa  │\n` +
+    `│    → Auto-reply AI    │\n` +
+    `└──────────────────────┘\n\n` +
 
-    `_Bot menggunakan AI Gemini & berbagai API publik._`;
+    `┌──────────────────────┐\n` +
+    `│  *MEDIA AI*           │\n` +
+    `├──────────────────────┤\n` +
+    `│ 🖼️ !stiker / !s      │\n` +
+    `│    Gambar → Stiker    │\n` +
+    `│ 🔊 !tts <teks>       │\n` +
+    `│    Teks → Suara (VN)  │\n` +
+    `│ 🎙️ !transkrip        │\n` +
+    `│    VN → Teks          │\n` +
+    `└──────────────────────┘\n\n` +
+
+    `┌──────────────────────┐\n` +
+    `│  *DOWNLOADER*         │\n` +
+    `├──────────────────────┤\n` +
+    `│ 📥 !dl <link>        │\n` +
+    `│    YT/TikTok/IG/FB   │\n` +
+    `│ ✂️ !hapusbg           │\n` +
+    `│    Hapus Background   │\n` +
+    `│ 📄 !kepdf             │\n` +
+    `│    Gambar → PDF       │\n` +
+    `└──────────────────────┘\n\n` +
+
+    `┌──────────────────────┐\n` +
+    `│  *UTILITAS*           │\n` +
+    `├──────────────────────┤\n` +
+    `│ 📱 !qr <teks>        │\n` +
+    `│    Generate QR Code   │\n` +
+    `│ 🔗 !short <url>       │\n` +
+    `│    URL Shortener      │\n` +
+    `│ 🧮 !hitung <rumus>    │\n` +
+    `│    Kalkulator         │\n` +
+    `└──────────────────────┘\n\n` +
+
+    `┌──────────────────────┐\n` +
+    `│  *INFO & DATA*        │\n` +
+    `├──────────────────────┤\n` +
+    `│ 🕐 !sholat <kota>    │\n` +
+    `│    Jadwal Sholat      │\n` +
+    `│ 🌤️ !cuaca <kota>     │\n` +
+    `│    Info Cuaca         │\n` +
+    `│ 💱 !kurs <dari> <ke> │\n` +
+    `│    Kurs Mata Uang     │\n` +
+    `│ 🪙 !crypto <koin>    │\n` +
+    `│    Harga Kripto       │\n` +
+    `└──────────────────────┘\n\n` +
+
+    `┌──────────────────────┐\n` +
+    `│  *BANTUAN*            │\n` +
+    `├──────────────────────┤\n` +
+    `│ 📋 !menu / !help     │\n` +
+    `│    Tampilkan menu ini │\n` +
+    `└──────────────────────┘\n\n` +
+
+    `_Ketik ! diikuti nama command._\n` +
+    `_Contoh: !stiker, !tts halo, !cuaca medan_`
+  );
 }
 
 export async function handleMenu(sock, msg) {
@@ -25,5 +78,5 @@ export async function handleMenu(sock, msg) {
 
   await sock.sendMessage(chatId, { text: menuText });
 
-  console.log(`📤 [Menu] Menu dikirim ke ${chatId}`);
+  logger.info({ jid: chatId }, 'Menu dikirim');
 }

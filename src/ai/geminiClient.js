@@ -1,9 +1,12 @@
 import Database from 'better-sqlite3';
 import { GoogleGenAI } from '@google/genai';
 import { config } from '../config/settings.js';
+import logger from '../utils/logger.js';
 
 let genAI = null;
 let db = null;
+
+const SYSTEM_INSTRUCTION = 'Kamu adalah asisten WhatsApp yang ramah dan membantu. Selalu jawab dalam Bahasa Indonesia. Jangan gunakan Bahasa Inggris kecuali diminta secara spesifik oleh pengguna. Jawaban harus singkat, jelas, dan mudah dipahami.';
 
 export function initGemini() {
   genAI = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
@@ -25,7 +28,7 @@ export function initGemini() {
     CREATE INDEX IF NOT EXISTS idx_chat_id ON chat_history(chat_id)
   `);
 
-  console.log('✅ Gemini & Database initialized');
+  logger.info('✅ Gemini & Database initialized');
 }
 
 function getHistory(chatId) {
@@ -77,6 +80,9 @@ export async function chatWithHistory(chatId, userMessage) {
   const response = await genAI.models.generateContent({
     model: config.GEMINI_MODEL,
     contents: history,
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+    },
   });
 
   const reply = response.text || 'Maaf, saya tidak bisa membalas saat ini.';
