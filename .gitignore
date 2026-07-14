@@ -5,3 +5,6 @@ nul
 *.db
 *.db-journal
 logs/
+*.db
+*.db-shm
+*.db-wal
