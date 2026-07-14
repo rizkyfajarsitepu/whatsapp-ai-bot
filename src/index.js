@@ -12,6 +12,7 @@ import { handleQR, handleShort, handleHitung } from './features/utilities.js';
 import { handleSholat, handleCuaca, handleKurs, handleCrypto } from './features/infoApi.js';
 import { handleMenu, getMenuText } from './features/menu.js';
 import { initVision, handleProactiveVision } from './features/aiImageVision.js';
+import { handleYoutubeSummary } from './features/youtubeSummarizer.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
@@ -32,6 +33,7 @@ const commands = {
   crypto: handleCrypto,
   menu: handleMenu,
   help: handleMenu,
+  ringkas: handleYoutubeSummary,
 };
 
 const knownUsers = new Set();
