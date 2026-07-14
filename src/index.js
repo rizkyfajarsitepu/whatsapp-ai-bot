@@ -11,6 +11,7 @@ import { handleImageToPdf } from './features/imageToPdf.js';
 import { handleQR, handleShort, handleHitung } from './features/utilities.js';
 import { handleSholat, handleCuaca, handleKurs, handleCrypto } from './features/infoApi.js';
 import { handleMenu, getMenuText } from './features/menu.js';
+import { initVision, handleProactiveVision } from './features/aiImageVision.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
@@ -56,6 +57,12 @@ async function handleMessage(sock, msg) {
   const chatId = msg.key.remoteJid;
   const senderName = msg.pushName || 'User';
   const text = getTextContent(msg);
+  const isImage = !!msg.message?.imageMessage;
+
+  if (isImage && !text.startsWith('!')) {
+    await handleProactiveVision(sock, msg, text);
+    return;
+  }
 
   if (!text) return;
 
@@ -116,6 +123,7 @@ process.on('unhandledRejection', (reason) => {
 async function main() {
   logger.info({ bot: config.BOT_NAME }, 'Bot starting...');
   initGemini();
+  initVision();
   initSTT();
   await startBot(handleMessage);
 }
