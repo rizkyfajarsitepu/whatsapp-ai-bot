@@ -74,6 +74,8 @@ async function handleMessage(sock, msg) {
 
   if (!text) return;
 
+  console.log(`[Pesan Masuk] User: ${chatId} | Text: ${text}`);
+
   await handleWelcome(sock, chatId, senderName);
 
   const { cmd, args } = getCommand(text);
