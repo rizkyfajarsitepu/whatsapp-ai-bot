@@ -69,7 +69,7 @@ app.get('/', (req, res) => {
 
       <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
         <p class="text-sm text-gray-400 uppercase tracking-wide">Total Pengguna</p>
-        <p class="text-xl font-semibold mt-1">${totalUsers}</p>
+        <p class="text-xl font-semibold mt-1" id="total-users">${totalUsers}</p>
       </div>
     </div>
 
@@ -83,7 +83,7 @@ app.get('/', (req, res) => {
             <th class="px-4 py-2">Pemakaian</th>
           </tr>
         </thead>
-        <tbody>${tableRows}</tbody>
+        <tbody id="user-table-body">${tableRows}</tbody>
       </table>
     </div>
 
@@ -102,6 +102,22 @@ app.get('/', (req, res) => {
       div.textContent = msg;
       terminal.appendChild(div);
       terminal.scrollTop = terminal.scrollHeight;
+    });
+
+    socket.on('update_stats', (data) => {
+      document.getElementById('total-users').innerText = data.total;
+      const tbody = document.getElementById('user-table-body');
+      if (data.total === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Belum ada data pengguna</td></tr>';
+      } else {
+        tbody.innerHTML = data.users.map(u =>
+          '<tr class="border-b border-gray-700 hover:bg-gray-700">' +
+            '<td class="px-4 py-3">' + u.no + '</td>' +
+            '<td class="px-4 py-3 font-mono text-sm">' + u.id + '</td>' +
+            '<td class="px-4 py-3">' + u.used + ' / ' + u.limit + '</td>' +
+          '</tr>'
+        ).join('');
+      }
     });
   </script>
 </body>
@@ -145,6 +161,17 @@ export function startDashboard() {
       };
     }
   }
+
+  setInterval(() => {
+    const users = [];
+    let i = 1;
+    for (const [jid, limiter] of limiters) {
+      const remaining = limiter._reservoir ?? MAX_REQUESTS;
+      const used = MAX_REQUESTS - remaining;
+      users.push({ no: i++, id: jid, used, limit: MAX_REQUESTS });
+    }
+    io.emit('update_stats', { total: limiters.size, users });
+  }, 3000);
 
   server.listen(PORT, () => {
     logger.info({ port: PORT }, 'Dashboard server started');
