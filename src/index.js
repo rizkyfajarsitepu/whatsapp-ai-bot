@@ -15,6 +15,7 @@ import { initVision, handleProactiveVision } from './features/aiImageVision.js';
 import { handleYoutubeSummary } from './features/youtubeSummarizer.js';
 import { handleTextToImage } from './features/textToImage.js';
 import { activePersonas, handleToggleMode, handlePersonaChat } from './features/personaMode.js';
+import { startDashboard } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
@@ -134,6 +135,7 @@ process.on('unhandledRejection', (reason) => {
 
 async function main() {
   logger.info({ bot: config.BOT_NAME }, 'Bot starting...');
+  startDashboard();
   initGemini();
   initVision();
   initSTT();
