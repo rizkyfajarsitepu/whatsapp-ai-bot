@@ -1,9 +1,13 @@
+import http from 'http';
 import express from 'express';
 import basicAuth from 'express-basic-auth';
+import { Server } from 'socket.io';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = process.env.DASHBOARD_PORT || 3000;
 const MAX_REQUESTS = 10;
 
@@ -43,6 +47,7 @@ app.get('/', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Control Panel Bot</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen p-4">
   <div class="w-full max-w-4xl mx-auto space-y-6">
@@ -81,7 +86,24 @@ app.get('/', (req, res) => {
         <tbody>${tableRows}</tbody>
       </table>
     </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+      <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Live Terminal</p>
+      <div id="terminal-box" class="bg-black text-green-400 font-mono text-sm p-4 h-64 overflow-y-auto rounded-lg shadow-lg"></div>
+    </div>
   </div>
+
+  <script>
+    const socket = io();
+    const terminal = document.getElementById('terminal-box');
+
+    socket.on('terminal_log', (msg) => {
+      const div = document.createElement('div');
+      div.textContent = msg;
+      terminal.appendChild(div);
+      terminal.scrollTop = terminal.scrollHeight;
+    });
+  </script>
 </body>
 </html>`);
 });
@@ -95,7 +117,36 @@ app.get('/api/stats', (req, res) => {
 });
 
 export function startDashboard() {
-  app.listen(PORT, () => {
+  const _log = console.log;
+  const _info = console.info;
+  const _warn = console.warn;
+  const _error = console.error;
+
+  function emitLog(level, args) {
+    const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const msg = Array.from(args).map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    io.emit('terminal_log', `[${now}] [${level}] ${msg}`);
+  }
+
+  console.log = function (...args) { _log.apply(console, args); emitLog('LOG', args); };
+  console.info = function (...args) { _info.apply(console, args); emitLog('INFO', args); };
+  console.warn = function (...args) { _warn.apply(console, args); emitLog('WARN', args); };
+  console.error = function (...args) { _error.apply(console, args); emitLog('ERROR', args); };
+
+  const levels = ['info', 'warn', 'error', 'fatal'];
+  for (const level of levels) {
+    const original = logger[level];
+    if (original) {
+      logger[level] = function (...args) {
+        const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const msg = Array.from(args).filter(a => typeof a === 'string').join(' ');
+        io.emit('terminal_log', `[${now}] [${level.toUpperCase()}] ${msg}`);
+        original.apply(this, args);
+      };
+    }
+  }
+
+  server.listen(PORT, () => {
     logger.info({ port: PORT }, 'Dashboard server started');
   });
 }
