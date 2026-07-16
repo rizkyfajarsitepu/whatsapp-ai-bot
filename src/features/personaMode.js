@@ -1,6 +1,6 @@
 import logger from '../utils/logger.js';
 import { chatWithCustomSystem } from '../ai/geminiClient.js';
-import googleTts from 'google-tts-api';
+import axios from 'axios';
 
 export const activePersonas = new Map();
 
@@ -54,14 +54,25 @@ export async function handlePersonaChat(sock, msg, text) {
   try {
     const reply = await chatWithCustomSystem(chatId, text, systemPrompt);
 
-    const audioUrl = googleTts.getAudioUrl(reply, {
-      lang: 'id',
-      slow: false,
-      host: 'https://translate.google.com',
-    });
+    const response = await axios.post(
+      'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
+      {
+        text: reply,
+        model_id: 'eleven_multilingual_v2',
+      },
+      {
+        headers: {
+          'xi-api-key': process.env.ELEVENLABS_API_KEY,
+          Accept: 'audio/mpeg',
+        },
+        responseType: 'arraybuffer',
+      },
+    );
+
+    const audioBuffer = Buffer.from(response.data);
 
     await sock.sendMessage(chatId, {
-      audio: { url: audioUrl },
+      audio: audioBuffer,
       mimetype: 'audio/mp4',
       ptt: true,
     }, { quoted: msg });
