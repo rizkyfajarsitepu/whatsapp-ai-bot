@@ -13,6 +13,7 @@ export function getMenuText() {
     `───────────────\n` +
     `*MEDIA AI*\n` +
     `🖼️ !stiker / !s — Gambar ke Stiker\n` +
+    `🎨 !gambar <deskripsi> — AI Image Generator\n` +
     `🔊 !tts <teks> — Teks ke Suara (VN)\n` +
     `🎙️ !transkrip — VN ke Teks\n` +
     `📹 !ringkas <link> — Bedah Video YouTube\n\n` +

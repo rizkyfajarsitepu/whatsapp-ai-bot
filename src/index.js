@@ -13,6 +13,7 @@ import { handleSholat, handleCuaca, handleKurs, handleCrypto } from './features/
 import { handleMenu, getMenuText } from './features/menu.js';
 import { initVision, handleProactiveVision } from './features/aiImageVision.js';
 import { handleYoutubeSummary } from './features/youtubeSummarizer.js';
+import { handleTextToImage } from './features/textToImage.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
@@ -34,6 +35,8 @@ const commands = {
   menu: handleMenu,
   help: handleMenu,
   ringkas: handleYoutubeSummary,
+  gambar: handleTextToImage,
+  imagine: handleTextToImage,
 };
 
 const knownUsers = new Set();
