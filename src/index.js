@@ -14,6 +14,7 @@ import { handleMenu, getMenuText } from './features/menu.js';
 import { initVision, handleProactiveVision } from './features/aiImageVision.js';
 import { handleYoutubeSummary } from './features/youtubeSummarizer.js';
 import { handleTextToImage } from './features/textToImage.js';
+import { activePersonas, handleToggleMode, handlePersonaChat } from './features/personaMode.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
@@ -37,6 +38,7 @@ const commands = {
   ringkas: handleYoutubeSummary,
   gambar: handleTextToImage,
   imagine: handleTextToImage,
+  mode: handleToggleMode,
 };
 
 const knownUsers = new Set();
@@ -102,6 +104,11 @@ async function handleMessage(sock, msg) {
   if (!allowed) {
     await sock.sendMessage(chatId, { text: getRateLimitMessage() });
     logger.warn({ jid: chatId }, 'Rate limit terkena (AI)');
+    return;
+  }
+
+  if (activePersonas.has(chatId)) {
+    await handlePersonaChat(sock, msg, text);
     return;
   }
 

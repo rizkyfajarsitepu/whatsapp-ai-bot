@@ -90,3 +90,17 @@ export async function chatWithHistory(chatId, userMessage) {
   saveMessage(chatId, 'model', reply);
   return reply;
 }
+
+export async function chatWithCustomSystem(chatId, userMessage, systemInstruction) {
+  if (!genAI) throw new Error('Gemini belum diinisialisasi. Panggil initGemini()');
+
+  const response = await genAI.models.generateContent({
+    model: config.GEMINI_MODEL,
+    contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+    config: {
+      systemInstruction,
+    },
+  });
+
+  return response.text || 'Maaf, saya tidak bisa membalas saat ini.';
+}
