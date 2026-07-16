@@ -1,6 +1,6 @@
 import Bottleneck from 'bottleneck';
 
-const limiters = new Map();
+export const limiters = new Map();
 
 const MAX_REQUESTS = 10;
 const PERIOD_MS = 60 * 1000;
