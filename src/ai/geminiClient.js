@@ -6,7 +6,10 @@ import logger from '../utils/logger.js';
 let genAI = null;
 let db = null;
 
-const SYSTEM_INSTRUCTION = 'Kamu adalah asisten WhatsApp yang ramah dan membantu. Selalu jawab dalam Bahasa Indonesia. Jangan gunakan Bahasa Inggris kecuali diminta secara spesifik oleh pengguna. Jawaban harus singkat, jelas, dan mudah dipahami.';
+function getSystemInstruction() {
+  const currentTime = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+  return `Kamu adalah asisten WhatsApp yang ramah dan membantu. Waktu saat ini adalah ${currentTime}. Selalu jawab dalam Bahasa Indonesia. Jangan gunakan Bahasa Inggris kecuali diminta secara spesifik oleh pengguna. Jawaban harus singkat, jelas, dan mudah dipahami.`;
+}
 
 export function initGemini() {
   genAI = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
@@ -81,7 +84,7 @@ export async function chatWithHistory(chatId, userMessage) {
     model: config.GEMINI_MODEL,
     contents: history,
     config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: getSystemInstruction(),
     },
   });
 
