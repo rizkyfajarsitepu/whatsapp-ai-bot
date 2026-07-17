@@ -24,8 +24,15 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
         let ppUrl;
         try {
           ppUrl = await sock.profilePictureUrl(num, 'image');
-        } catch {
+        } catch (err) {
+          ppUrl = null;
+        }
+
+        if (!ppUrl) {
+          console.log(`[ℹ️ INFO] ${num} tidak ada foto profil. Memakai avatar default.`);
           ppUrl = 'https://i.ibb.co/3Fh9V6p/avatar-contact.png';
+        } else {
+          console.log(`[ℹ️ INFO] Mengunduh DP untuk ${num}...`);
         }
 
         const canvas = createCanvas(800, 300);
