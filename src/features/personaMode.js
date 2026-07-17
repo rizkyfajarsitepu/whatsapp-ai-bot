@@ -1,6 +1,12 @@
 import logger from '../utils/logger.js';
 import { chatWithCustomSystem } from '../ai/geminiClient.js';
 import axios from 'axios';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import fs from 'fs';
+import path from 'path';
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 export const activePersonas = new Map();
 
@@ -71,9 +77,31 @@ export async function handlePersonaChat(sock, msg, text) {
 
     const audioBuffer = Buffer.from(response.data);
 
+    const inputPath = path.resolve('./temp_input.mp3');
+    const outputPath = path.resolve('./temp_output.ogg');
+
+    fs.writeFileSync(inputPath, audioBuffer);
+
+    const oggBuffer = await new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .audioCodec('libopus')
+        .toFormat('ogg')
+        .save(outputPath)
+        .on('end', () => {
+          const buf = fs.readFileSync(outputPath);
+          fs.unlinkSync(inputPath);
+          fs.unlinkSync(outputPath);
+          resolve(buf);
+        })
+        .on('error', (err) => {
+          fs.unlinkSync(inputPath);
+          reject(err);
+        });
+    });
+
     await sock.sendMessage(chatId, {
-      audio: audioBuffer,
-      mimetype: 'audio/mp4',
+      audio: oggBuffer,
+      mimetype: 'audio/ogg; codecs=opus',
       ptt: true,
     }, { quoted: msg });
 
