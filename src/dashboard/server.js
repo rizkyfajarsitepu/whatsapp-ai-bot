@@ -82,6 +82,11 @@ app.get('/', (req, res) => {
       <button onclick="kirimBroadcast()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded w-full mt-3 transition duration-300 shadow-lg">📤 Kirim Broadcast</button>
     </div>
 
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400 mb-3">⚙️ Manajemen Fitur</p>
+      <div id="toggle-container"></div>
+    </div>
+
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 overflow-x-auto">
       <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Daftar Pengguna</p>
       <table class="w-full text-left">
@@ -140,6 +145,32 @@ app.get('/', (req, res) => {
         ).join('');
       }
     });
+
+    socket.on('init_toggles', (toggles) => {
+      const container = document.getElementById('toggle-container');
+      container.innerHTML = '';
+
+      for (const [feature, isEnabled] of Object.entries(toggles)) {
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
+
+        const label = document.createElement('span');
+        label.className = 'text-white font-semibold uppercase text-sm';
+        label.innerText = feature.replace(/_/g, ' ');
+
+        const btn = document.createElement('button');
+        btn.className = `px-4 py-1 rounded font-bold transition duration-300 ${isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`;
+        btn.innerText = isEnabled ? 'ON' : 'OFF';
+
+        btn.onclick = () => {
+          socket.emit('update_toggle', { feature: feature, status: !isEnabled });
+        };
+
+        div.appendChild(label);
+        div.appendChild(btn);
+        container.appendChild(div);
+      }
+    });
   </script>
 </body>
 </html>`);
@@ -154,12 +185,25 @@ app.get('/api/stats', (req, res) => {
 });
 
 let dashboardSock = null;
+let dashboardToggles = null;
 
 io.on('connection', (socket) => {
     console.log('[Dashboard] Klien baru terhubung ke Socket.io');
 
     logHistory.forEach(msg => {
       socket.emit('terminal_log', msg);
+    });
+
+    if (dashboardToggles) {
+      socket.emit('init_toggles', dashboardToggles);
+    }
+
+    socket.on('update_toggle', (data) => {
+      if (dashboardToggles && Object.prototype.hasOwnProperty.call(dashboardToggles, data.feature)) {
+        dashboardToggles[data.feature] = data.status;
+        console.log(`[⚙️ SYSTEM] Fitur '${data.feature}' diubah menjadi: ${data.status ? 'ON' : 'OFF'}`);
+        io.emit('init_toggles', dashboardToggles);
+      }
     });
 
   socket.on('send_broadcast', async (pesan) => {
@@ -203,8 +247,9 @@ io.on('connection', (socket) => {
   });
 });
 
-export function startDashboard(sock) {
+export function startDashboard(sock, featureToggles) {
   dashboardSock = sock;
+  dashboardToggles = featureToggles;
 
   const originalLog = console.log.bind(console);
   console.log = (...args) => {

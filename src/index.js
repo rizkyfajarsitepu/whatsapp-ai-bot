@@ -19,6 +19,40 @@ import { startDashboard } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
+export const featureToggles = {
+    ai_chat: true,
+    stiker: true,
+    tts: true,
+    stt: true,
+    downloader: true,
+    image_tools: true,
+    info_tools: true,
+    utility_tools: true,
+    ringkas: true,
+    persona: true,
+};
+
+const featureMap = {
+    stiker: 'stiker',
+    s: 'stiker',
+    tts: 'tts',
+    transkrip: 'stt',
+    dl: 'downloader',
+    hapusbg: 'image_tools',
+    kepdf: 'image_tools',
+    qr: 'utility_tools',
+    short: 'utility_tools',
+    hitung: 'utility_tools',
+    sholat: 'info_tools',
+    cuaca: 'info_tools',
+    kurs: 'info_tools',
+    crypto: 'info_tools',
+    ringkas: 'ringkas',
+    gambar: 'image_tools',
+    imagine: 'image_tools',
+    mode: 'persona',
+};
+
 const commands = {
   stiker: handleSticker,
   s: handleSticker,
@@ -68,6 +102,7 @@ async function handleMessage(sock, msg) {
   const isImage = !!msg.message?.imageMessage;
 
   if (isImage && !text.startsWith('!')) {
+    if (!featureToggles.ai_chat) return;
     await handleProactiveVision(sock, msg, text);
     return;
   }
@@ -84,6 +119,11 @@ async function handleMessage(sock, msg) {
 
   const isCommand = cmd && commands[cmd];
   if (isCommand) {
+    const featureKey = featureMap[cmd];
+    if (featureKey && !featureToggles[featureKey]) {
+      return sock.sendMessage(chatId, { text: `🚨 Mohon maaf, fitur *${cmd}* sedang maintenance.` });
+    }
+
     const allowed = await checkRateLimit(chatId);
     if (!allowed) {
       await sock.sendMessage(chatId, { text: getRateLimitMessage() });
@@ -92,7 +132,11 @@ async function handleMessage(sock, msg) {
     }
 
     try {
-      await commands[cmd](sock, msg, args);
+      if (cmd === 'menu' || cmd === 'help') {
+        await handleMenu(sock, msg, featureToggles);
+      } else {
+        await commands[cmd](sock, msg, args);
+      }
       logger.info({ command: cmd, jid: chatId }, 'Command dieksekusi');
     } catch (err) {
       logger.error({ command: cmd, jid: chatId, err }, 'Error command');
@@ -101,6 +145,10 @@ async function handleMessage(sock, msg) {
       });
     }
     return;
+  }
+
+  if (!featureToggles.ai_chat) {
+    return sock.sendMessage(chatId, { text: '🚨 Mohon maaf, fitur AI Chat sedang maintenance.' });
   }
 
   const allowed = await checkRateLimit(chatId);
@@ -141,7 +189,7 @@ async function main() {
   initVision();
   initSTT();
   const sock = await startBot(handleMessage);
-  startDashboard(sock);
+  startDashboard(sock, featureToggles);
 }
 
 main().catch((err) => {
