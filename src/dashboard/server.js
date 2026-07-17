@@ -154,27 +154,43 @@ let dashboardSock = null;
 
 io.on('connection', (socket) => {
   socket.on('send_broadcast', async (pesan) => {
-      const users = Array.from(limiters.keys());
+      let users = [];
+      if (typeof limiters.keys === 'function') {
+          users = Array.from(limiters.keys());
+      } else {
+          users = Object.keys(limiters);
+      }
+
       console.log(`[📢 BROADCAST] Memulai pengiriman ke ${users.length} pengguna...`);
 
       for (let jid of users) {
           jid = String(jid);
+          console.log(`[🔍 DEBUG] Memproses ID asli: ${jid}`);
 
           if (!jid.includes('@')) {
               jid = jid + '@s.whatsapp.net';
           }
 
-          if (!jid.endsWith('@s.whatsapp.net')) continue;
+          if (jid.includes(':')) {
+              const parts = jid.split('@');
+              jid = parts[0].split(':')[0] + '@' + parts[1];
+          }
 
           try {
+              if (!dashboardSock) {
+                  console.log(`[❌ GAGAL KRITIS] Objek 'sock' Baileys tidak ditemukan! Cek parameter di index.js.`);
+                  break;
+              }
+
               await dashboardSock.sendMessage(jid, { text: pesan });
-              console.log(`[✅ TERKIRIM] Broadcast ke: ${jid.split('@')[0]}`);
+              console.log(`[✅ TERKIRIM] Broadcast sukses ke: ${jid}`);
+
               await new Promise(resolve => setTimeout(resolve, 3000));
           } catch (error) {
-              console.error(`[❌ GAGAL] Broadcast ke ${jid}:`, error.message);
+              console.log(`[❌ GAGAL] Broadcast ke ${jid} Error: ${error.message}`);
           }
       }
-      console.log(`[🎉 BROADCAST SELESAI] Pesan terkirim ke semua pengguna!`);
+      console.log(`[🎉 BROADCAST SELESAI] Selesai memproses pesan!`);
   });
 });
 
