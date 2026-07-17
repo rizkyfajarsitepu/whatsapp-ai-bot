@@ -11,6 +11,9 @@ const io = new Server(server);
 const PORT = process.env.DASHBOARD_PORT || 3000;
 const MAX_REQUESTS = 10;
 
+const logHistory = [];
+const MAX_LOGS = 200;
+
 app.use(basicAuth({
   users: { 'admin': 'admin' },
   challenge: true,
@@ -153,6 +156,12 @@ app.get('/api/stats', (req, res) => {
 let dashboardSock = null;
 
 io.on('connection', (socket) => {
+    console.log('[Dashboard] Klien baru terhubung ke Socket.io');
+
+    logHistory.forEach(msg => {
+      socket.emit('terminal_log', msg);
+    });
+
   socket.on('send_broadcast', async (pesan) => {
       let users = [];
       if (typeof limiters.keys === 'function') {
@@ -196,21 +205,58 @@ io.on('connection', (socket) => {
 
 export function startDashboard(sock) {
   dashboardSock = sock;
-  const _log = console.log;
-  const _info = console.info;
-  const _warn = console.warn;
-  const _error = console.error;
 
-  function emitLog(level, args) {
-    const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const msg = Array.from(args).map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-    io.emit('terminal_log', `[${now}] [${level}] ${msg}`);
-  }
+  const originalLog = console.log.bind(console);
+  console.log = (...args) => {
+    originalLog(...args);
+    const msg = args.join(' ');
+    logHistory.push(msg);
+    if (logHistory.length > MAX_LOGS) {
+      logHistory.shift();
+    }
+    if (typeof io !== 'undefined') {
+      io.emit('terminal_log', msg);
+    }
+  };
 
-  console.log = function (...args) { _log.apply(console, args); emitLog('LOG', args); };
-  console.info = function (...args) { _info.apply(console, args); emitLog('INFO', args); };
-  console.warn = function (...args) { _warn.apply(console, args); emitLog('WARN', args); };
-  console.error = function (...args) { _error.apply(console, args); emitLog('ERROR', args); };
+  const originalInfo = console.info.bind(console);
+  console.info = (...args) => {
+    originalInfo(...args);
+    const msg = args.join(' ');
+    logHistory.push(msg);
+    if (logHistory.length > MAX_LOGS) {
+      logHistory.shift();
+    }
+    if (typeof io !== 'undefined') {
+      io.emit('terminal_log', msg);
+    }
+  };
+
+  const originalWarn = console.warn.bind(console);
+  console.warn = (...args) => {
+    originalWarn(...args);
+    const msg = args.join(' ');
+    logHistory.push(msg);
+    if (logHistory.length > MAX_LOGS) {
+      logHistory.shift();
+    }
+    if (typeof io !== 'undefined') {
+      io.emit('terminal_log', msg);
+    }
+  };
+
+  const originalError = console.error.bind(console);
+  console.error = (...args) => {
+    originalError(...args);
+    const msg = args.join(' ');
+    logHistory.push(msg);
+    if (logHistory.length > MAX_LOGS) {
+      logHistory.shift();
+    }
+    if (typeof io !== 'undefined') {
+      io.emit('terminal_log', msg);
+    }
+  };
 
   const levels = ['info', 'warn', 'error', 'fatal'];
   for (const level of levels) {
