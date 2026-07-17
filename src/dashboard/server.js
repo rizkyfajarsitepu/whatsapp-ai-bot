@@ -154,21 +154,27 @@ let dashboardSock = null;
 
 io.on('connection', (socket) => {
   socket.on('send_broadcast', async (pesan) => {
-    const users = Array.from(limiters.keys());
-    console.log(`[📢 BROADCAST] Memulai pengiriman ke ${users.length} pengguna...`);
+      const users = Array.from(limiters.keys());
+      console.log(`[📢 BROADCAST] Memulai pengiriman ke ${users.length} pengguna...`);
 
-    for (const jid of users) {
-      if (!jid || !jid.endsWith('@s.whatsapp.net')) continue;
+      for (let jid of users) {
+          jid = String(jid);
 
-      try {
-        await dashboardSock.sendMessage(jid, { text: pesan });
-        console.log(`[✅ TERKIRIM] Broadcast ke: ${jid.split('@')[0]}`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      } catch (error) {
-        console.error(`[❌ GAGAL] Broadcast ke ${jid}`);
+          if (!jid.includes('@')) {
+              jid = jid + '@s.whatsapp.net';
+          }
+
+          if (!jid.endsWith('@s.whatsapp.net')) continue;
+
+          try {
+              await dashboardSock.sendMessage(jid, { text: pesan });
+              console.log(`[✅ TERKIRIM] Broadcast ke: ${jid.split('@')[0]}`);
+              await new Promise(resolve => setTimeout(resolve, 3000));
+          } catch (error) {
+              console.error(`[❌ GAGAL] Broadcast ke ${jid}:`, error.message);
+          }
       }
-    }
-    console.log(`[🎉 BROADCAST SELESAI] Pesan terkirim ke semua pengguna!`);
+      console.log(`[🎉 BROADCAST SELESAI] Pesan terkirim ke semua pengguna!`);
   });
 });
 
