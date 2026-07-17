@@ -73,6 +73,12 @@ app.get('/', (req, res) => {
       </div>
     </div>
 
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-3">📢 Broadcast Panel</p>
+      <textarea id="broadcastText" rows="4" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition duration-200" placeholder="Tulis pesan broadcast di sini..."></textarea>
+      <button onclick="kirimBroadcast()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded w-full mt-3 transition duration-300 shadow-lg">📤 Kirim Broadcast</button>
+    </div>
+
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 overflow-x-auto">
       <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Daftar Pengguna</p>
       <table class="w-full text-left">
@@ -104,6 +110,18 @@ app.get('/', (req, res) => {
       terminal.scrollTop = terminal.scrollHeight;
     });
 
+    function kirimBroadcast() {
+      const pesan = document.getElementById('broadcastText').value;
+      if (!pesan.trim()) return alert('Pesan tidak boleh kosong!');
+
+      const konfirmasi = confirm('Yakin ingin mengirim pesan ini ke SEMUA pengguna?');
+      if (konfirmasi) {
+        socket.emit('send_broadcast', pesan);
+        document.getElementById('broadcastText').value = '';
+        alert('Memulai pengiriman! Silakan pantau progresnya di Live Log Terminal di bawah.');
+      }
+    }
+
     socket.on('update_stats', (data) => {
       document.getElementById('total-users').innerText = data.total;
       const tbody = document.getElementById('user-table-body');
@@ -132,7 +150,30 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-export function startDashboard() {
+let dashboardSock = null;
+
+io.on('connection', (socket) => {
+  socket.on('send_broadcast', async (pesan) => {
+    const users = Array.from(limiters.keys());
+    console.log(`[📢 BROADCAST] Memulai pengiriman ke ${users.length} pengguna...`);
+
+    for (const jid of users) {
+      if (!jid || !jid.endsWith('@s.whatsapp.net')) continue;
+
+      try {
+        await dashboardSock.sendMessage(jid, { text: pesan });
+        console.log(`[✅ TERKIRIM] Broadcast ke: ${jid.split('@')[0]}`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } catch (error) {
+        console.error(`[❌ GAGAL] Broadcast ke ${jid}`);
+      }
+    }
+    console.log(`[🎉 BROADCAST SELESAI] Pesan terkirim ke semua pengguna!`);
+  });
+});
+
+export function startDashboard(sock) {
+  dashboardSock = sock;
   const _log = console.log;
   const _info = console.info;
   const _warn = console.warn;

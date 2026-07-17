@@ -137,11 +137,11 @@ process.on('unhandledRejection', (reason) => {
 
 async function main() {
   logger.info({ bot: config.BOT_NAME }, 'Bot starting...');
-  startDashboard();
   initGemini();
   initVision();
   initSTT();
-  await startBot(handleMessage);
+  const sock = await startBot(handleMessage);
+  startDashboard(sock);
 }
 
 main().catch((err) => {
