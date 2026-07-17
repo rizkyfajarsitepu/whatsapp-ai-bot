@@ -21,18 +21,21 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
       const groupName = groupMetadata.subject || 'Grup WhatsApp';
 
       for (let num of participants) {
+        const jid = typeof num === 'object' && num !== null ? num.id : num;
+        const targetJid = String(jid);
+
         let ppUrl;
         try {
-          ppUrl = await sock.profilePictureUrl(num, 'image');
+          ppUrl = await sock.profilePictureUrl(targetJid, 'image');
         } catch (err) {
           ppUrl = null;
         }
 
         if (!ppUrl) {
-          console.log(`[ℹ️ INFO] ${num} tidak ada foto profil. Memakai avatar default.`);
+          console.log(`[ℹ️ INFO] ${targetJid} tidak ada foto profil. Memakai avatar default.`);
           ppUrl = 'https://i.ibb.co/3Fh9V6p/avatar-contact.png';
         } else {
-          console.log(`[ℹ️ INFO] Mengunduh DP untuk ${num}...`);
+          console.log(`[ℹ️ INFO] Mengunduh DP untuk ${targetJid}...`);
         }
 
         const canvas = createCanvas(800, 300);
@@ -73,7 +76,7 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
 
         ctx.font = '30px Arial';
         ctx.fillStyle = '#cccccc';
-        const memberName = num.split('@')[0];
+        const memberName = targetJid.split('@')[0];
         ctx.fillText(`@${memberName}`, 300, 170);
 
         ctx.font = 'bold 35px Arial';
@@ -87,7 +90,7 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
         await sock.sendMessage(id, {
           image: buffer,
           caption: captionMsg,
-          mentions: [num]
+          mentions: [targetJid]
         });
         console.log(`[✅ SUKSES] Canvas terkirim ke ${memberName}`);
       }
