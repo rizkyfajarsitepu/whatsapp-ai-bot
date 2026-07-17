@@ -159,7 +159,7 @@ app.get('/', (req, res) => {
         label.innerText = feature.replace(/_/g, ' ');
 
         const btn = document.createElement('button');
-        btn.className = `px-4 py-1 rounded font-bold transition duration-300 ${isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`;
+        btn.className = 'px-4 py-1 rounded font-bold transition duration-300 ' + (isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
         btn.innerText = isEnabled ? 'ON' : 'OFF';
 
         btn.onclick = () => {
