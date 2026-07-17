@@ -8,7 +8,8 @@ export function getMenuText() {
 
     `───────────────\n` +
     `*AI & CHAT*\n` +
-    `💬 Kirim pesan → Chat dengan AI\n\n` +
+    `💬 Kirim pesan → Chat dengan AI\n` +
+    `🎭 !mode <pacar|tsundere|auto> — Mode Persona AI\n\n` +
 
     `───────────────\n` +
     `*MEDIA AI*\n` +
