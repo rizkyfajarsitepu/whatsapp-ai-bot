@@ -19,6 +19,8 @@ import { startDashboard } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 
+export const menfessSessions = new Map();
+
 export const featureToggles = {
     ai_chat: true,
     stiker: true,
@@ -30,6 +32,7 @@ export const featureToggles = {
     utility_tools: true,
     ringkas: true,
     persona: true,
+    menfess: true,
 };
 
 const featureMap = {
@@ -116,6 +119,58 @@ async function handleMessage(sock, msg) {
   const { cmd, args } = getCommand(text);
 
   logger.info({ sender: senderName, jid: chatId, text }, 'Pesan diterima');
+
+  if (cmd === 'menfess') {
+    if (!featureToggles.menfess) return sock.sendMessage(chatId, { text: '🚨 Fitur Menfess sedang dimatikan/maintenance.' });
+
+    if (!args || !args.includes('|')) {
+      return sock.sendMessage(chatId, { text: '⚠️ Format salah!\n\n*Cara pakai:*\n!menfess <nomor_tujuan> | <pesan>\n\n*Contoh:*\n!menfess 628123456789 | halo, aku suka kamu' });
+    }
+
+    let [targetNumber, ...menfessMsgArr] = args.split('|');
+    targetNumber = targetNumber.trim();
+    const menfessMsg = menfessMsgArr.join('|').trim();
+
+    if (targetNumber.startsWith('0')) targetNumber = '62' + targetNumber.slice(1);
+    const targetJid = targetNumber + '@s.whatsapp.net';
+
+    if (targetJid === chatId) return sock.sendMessage(chatId, { text: '❌ Kamu tidak bisa mengirim pesan rahasia ke diri sendiri.' });
+
+    menfessSessions.set(targetJid, chatId);
+
+    const targetText = `💌 *ADA PESAN RAHASIA (MENFESS)* 💌\n\nDari seseorang:\n_"${menfessMsg}"_\n\n---\n_Ketik *!balasmenfess [pesan]* untuk membalas pesan ini tanpa membocorkan identitasmu._`;
+
+    try {
+      await sock.sendMessage(targetJid, { text: targetText });
+      await sock.sendMessage(chatId, { text: '✅ Pesan rahasiamu telah berhasil dan aman dikirim ke target!' });
+    } catch (err) {
+      await sock.sendMessage(chatId, { text: '❌ Gagal mengirim menfess. Pastikan nomor tujuan terdaftar di WhatsApp.' });
+    }
+    return;
+  }
+
+  if (cmd === 'balasmenfess') {
+    if (!featureToggles.menfess) return sock.sendMessage(chatId, { text: '🚨 Fitur Menfess sedang dimatikan.' });
+
+    if (!args || !args.trim()) return sock.sendMessage(chatId, { text: '⚠️ Pesan balasan tidak boleh kosong!\n*Contoh:* !balasmenfess oh ya? siapa nih?' });
+
+    if (!menfessSessions.has(chatId)) {
+      return sock.sendMessage(chatId, { text: '❌ Kamu tidak memiliki pesan rahasia yang belum dibalas.' });
+    }
+
+    const originalSender = menfessSessions.get(chatId);
+    menfessSessions.set(originalSender, chatId);
+
+    const senderText = `💌 *BALASAN MENFESS* 💌\n\nTarget membalas:\n_"${args.trim()}"_\n\n---\n_Ketik *!balasmenfess [pesan]* untuk membalas balik._`;
+
+    try {
+      await sock.sendMessage(originalSender, { text: senderText });
+      await sock.sendMessage(chatId, { text: '✅ Balasan berhasil dikirim secara anonim!' });
+    } catch (err) {
+      await sock.sendMessage(chatId, { text: '❌ Gagal mengirim balasan.' });
+    }
+    return;
+  }
 
   const isCommand = cmd && commands[cmd];
   if (isCommand) {

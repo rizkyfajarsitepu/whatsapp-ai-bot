@@ -43,6 +43,11 @@ export function getMenuText(featureToggles = {}) {
   text += '\n';
 
   text += `───────────────\n`;
+  text += `*SOSIAL*\n`;
+  if (t.menfess !== false) text += `💌 !menfess <nomor> | <pesan> — Kirim Pesan Rahasia\n`;
+  text += '\n';
+
+  text += `───────────────\n`;
   text += `*BANTUAN*\n`;
   text += `📋 !menu / !help — Tampilkan menu ini\n\n`;
 
