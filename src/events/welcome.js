@@ -26,7 +26,10 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
 
         let ppUrl;
         try {
-          ppUrl = await sock.profilePictureUrl(targetJid, 'image');
+          ppUrl = await Promise.race([
+            sock.profilePictureUrl(targetJid, 'image'),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout DP')), 2000))
+          ]);
         } catch (err) {
           ppUrl = null;
         }
