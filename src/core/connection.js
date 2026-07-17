@@ -6,11 +6,12 @@ import {
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import path from 'path';
+import { createCanvas, loadImage } from 'canvas';
 import logger from '../utils/logger.js';
 
 const baileysLogger = logger.child({ module: 'baileys' }, { level: 'silent' });
 
-export async function startBot(messageHandler) {
+export async function startBot(messageHandler, featureToggles = {}) {
   const { state, saveCreds } = await useMultiFileAuthState(
     path.resolve('auth_info')
   );
@@ -67,6 +68,94 @@ export async function startBot(messageHandler) {
         await messageHandler(sock, msg);
       } catch (err) {
         logger.error({ err }, 'Error memproses pesan');
+      }
+    }
+  });
+
+  sock.ev.on('group-participants.update', async (update) => {
+    const { id, participants, action } = update;
+
+    console.log(`[🔍 RADAR GRUP] Aksi '${action}' terdeteksi di grup ${id}`);
+
+    if (action === 'add') {
+      if (featureToggles && !featureToggles.welcome_canvas) {
+        console.log('[⚙️ SYSTEM] Fitur Welcome Canvas sedang OFF.');
+        return;
+      }
+
+      try {
+        console.log(`[⏳ PROSES WELCOME] Merender canvas untuk ${participants.length} member...`);
+
+        const groupMetadata = await sock.groupMetadata(id);
+        const groupName = groupMetadata.subject;
+
+        for (let num of participants) {
+          let ppUrl;
+          try {
+            ppUrl = await sock.profilePictureUrl(num, 'image');
+          } catch {
+            console.log(`[ℹ️ INFO] ${num} tidak ada foto profil, pakai default.`);
+            ppUrl = 'https://i.ibb.co/3Fh9V6p/avatar-contact.png';
+          }
+
+          const canvas = createCanvas(800, 300);
+          const ctx = canvas.getContext('2d');
+
+          const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          gradient.addColorStop(0, '#0f2027');
+          gradient.addColorStop(0.5, '#203a43');
+          gradient.addColorStop(1, '#2c5364');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+          for (let i = 0; i < 100; i++) {
+            ctx.beginPath();
+            ctx.arc(Math.random() * canvas.width, Math.random() * canvas.height, Math.random() * 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          const avatar = await loadImage(ppUrl);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(150, 150, 100, 0, Math.PI * 2, true);
+          ctx.closePath();
+          ctx.clip();
+          ctx.drawImage(avatar, 50, 50, 200, 200);
+          ctx.restore();
+
+          ctx.beginPath();
+          ctx.arc(150, 150, 100, 0, Math.PI * 2, true);
+          ctx.strokeStyle = '#00ffcc';
+          ctx.lineWidth = 10;
+          ctx.stroke();
+
+          ctx.font = 'bold 55px Arial';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText('WELCOME!', 300, 120);
+
+          ctx.font = '30px Arial';
+          ctx.fillStyle = '#cccccc';
+          const memberName = num.split('@')[0];
+          ctx.fillText(`@${memberName}`, 300, 170);
+
+          ctx.font = 'bold 35px Arial';
+          ctx.fillStyle = '#00ffcc';
+          const shortGroupName = groupName.length > 22 ? groupName.substring(0, 22) + '...' : groupName;
+          ctx.fillText(shortGroupName, 300, 230);
+
+          const buffer = canvas.toBuffer('image/png');
+          const captionMsg = `Halo @${memberName}! 👋\n\nSelamat datang di grup *${groupName}*.\nJangan lupa perkenalkan diri dan patuhi rules grup ya!`;
+
+          await sock.sendMessage(id, {
+            image: buffer,
+            caption: captionMsg,
+            mentions: [num]
+          });
+          console.log(`[✅ SUKSES] Banner welcome terkirim ke ${memberName}`);
+        }
+      } catch (err) {
+        console.error('[❌ ERROR WELCOME CANVAS]', err.message);
       }
     }
   });
