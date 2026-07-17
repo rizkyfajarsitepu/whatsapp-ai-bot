@@ -82,11 +82,6 @@ app.get('/', (req, res) => {
       <button onclick="kirimBroadcast()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded w-full mt-3 transition duration-300 shadow-lg">📤 Kirim Broadcast</button>
     </div>
 
-    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
-      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400 mb-3">⚙️ Manajemen Fitur</p>
-      <div id="toggle-container"></div>
-    </div>
-
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 overflow-x-auto">
       <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Daftar Pengguna</p>
       <table class="w-full text-left">
@@ -104,6 +99,11 @@ app.get('/', (req, res) => {
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
       <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Live Terminal</p>
       <div id="terminal-box" class="bg-black text-green-400 font-mono text-sm p-4 h-64 overflow-y-auto rounded-lg shadow-lg"></div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400 mb-3">⚙️ Manajemen Fitur</p>
+      <div id="toggle-container"></div>
     </div>
   </div>
 
