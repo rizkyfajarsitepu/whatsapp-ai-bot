@@ -12,7 +12,7 @@ const PORT = process.env.DASHBOARD_PORT || 3000;
 const MAX_REQUESTS = 10;
 
 app.use(basicAuth({
-  users: { 'admin': 'rahasia123' },
+  users: { 'admin': 'admin' },
   challenge: true,
 }));
 
