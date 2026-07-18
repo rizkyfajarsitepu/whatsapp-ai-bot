@@ -347,17 +347,38 @@ app.get('/api/rpg/users', (req, res) => {
   res.json(getRpgDB());
 });
 
-app.post('/api/rpg/suntik', express.json(), (req, res) => {
-  const { jid, xp } = req.body;
+app.post('/api/rpg/suntik', express.json(), async (req, res) => {
+  let { jid, xp } = req.body;
   if (!jid || !xp) return res.status(400).json({ error: 'JID dan XP wajib diisi' });
 
+  let targetNumber = jid.split('@')[0].replace(/[^0-9]/g, '');
+  if (targetNumber.startsWith('0')) targetNumber = '62' + targetNumber.substring(1);
+  const cleanJid = jid.endsWith('@lid') ? jid : targetNumber + '@s.whatsapp.net';
+
+  const rpgDB = getRpgDB();
+  const oldLevel = rpgDB[cleanJid] ? rpgDB[cleanJid].level : 0;
+
   try {
-    const updatedUser = suntikXP(jid, xp);
-    res.json({
-      success: true,
-      message: `Jalur Orang Dalam Sukses! Ditambahkan ${xp} XP.`,
-      data: updatedUser
-    });
+    const updatedUser = suntikXP(cleanJid, xp);
+
+    if (updatedUser.level > oldLevel) {
+      const groups = await dashboardSock.groupFetchAllParticipating();
+      for (const groupId in groups) {
+        const group = groups[groupId];
+        const isMember = group.participants.some(p => {
+          const pid = typeof p === 'object' && p !== null ? p.id : p;
+          return String(pid).split('@')[0].split(':')[0] === targetNumber || pid === cleanJid;
+        });
+
+        if (isMember) {
+          const alertMsg = `🎉 *PROMOSI JABATAN* 🎉\n\nSelamat kepada @${cleanJid.split('@')[0]}!\nJabatan anda kini naik menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Tetap mengabdi untuk rakyat ya!_`;
+          await dashboardSock.sendMessage(groupId, { text: alertMsg, mentions: [cleanJid] });
+          break;
+        }
+      }
+    }
+
+    res.json({ success: true, message: `Suntik sukses! Jabatan: ${updatedUser.pangkat}`, data: updatedUser });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
