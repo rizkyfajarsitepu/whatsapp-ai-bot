@@ -133,13 +133,23 @@ async function handleMessage(sock, msg) {
   await handleLeveling(sock, msg, featureToggles);
 
   const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+
   if (textMessage.trim() === '!pangkat' || textMessage.trim() === '!profil') {
-    if (!featureToggles.rpg_leveling) {
-      await sock.sendMessage(chatId, { text: '🚨 Fitur Pejabat sedang cuti (OFF).' }, { quoted: msg });
+    const isGroupChat = msg.key.remoteJid.endsWith('@g.us');
+
+    if (!isGroupChat) {
+      await sock.sendMessage(msg.key.remoteJid, { text: '🚨 KTP dan Jabatan Pemerintahan hanya berlaku di dalam Grup!' }, { quoted: msg });
       return;
     }
+
+    if (!featureToggles.rpg_leveling) {
+      await sock.sendMessage(msg.key.remoteJid, { text: '🚨 Fitur Pejabat sedang cuti (OFF).' }, { quoted: msg });
+      return;
+    }
+
+    const sender = msg.key.participant || msg.key.remoteJid;
     const statsMsg = getProfileStats(sender);
-    await sock.sendMessage(chatId, { text: statsMsg, mentions: [sender] }, { quoted: msg });
+    await sock.sendMessage(msg.key.remoteJid, { text: statsMsg, mentions: [sender] }, { quoted: msg });
     return;
   }
 

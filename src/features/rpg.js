@@ -23,7 +23,10 @@ export const getPangkat = (level) => {
 
 export const handleLeveling = async (sock, msg, featureToggles) => {
     if (featureToggles && featureToggles.rpg_leveling === false) return;
-    
+
+    const isGroup = msg.key.remoteJid.endsWith('@g.us');
+    if (!isGroup) return;
+
     const sender = msg.key.participant || msg.key.remoteJid;
     if (!sender) return;
 
