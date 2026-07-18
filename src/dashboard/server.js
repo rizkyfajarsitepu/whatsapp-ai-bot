@@ -387,6 +387,9 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
         const groupMeta = await dashboardSock.groupMetadata(groupId);
         const participants = groupMeta.participants || [];
 
+        const allIds = participants.map(p => typeof p === 'object' && p !== null ? p.id : p);
+        console.log(`\n[🔍 INTEL BONGKAR DATA] Daftar ID di Grup "${groupMeta.subject}":\n`, allIds);
+
         let found = false;
         for (const p of participants) {
           const participantId = typeof p === 'object' && p !== null ? p.id : p;
