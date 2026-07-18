@@ -55,17 +55,21 @@ app.post('/api/login', express.json(), (req, res) => {
 
   if (username === 'superadmin' && password === 'rahasia123') {
     req.session.isLoggedIn = true;
-    req.session.username = username;
     req.session.role = 'superadmin';
-    return res.json({ success: true, message: 'Login berhasil sebagai Super Admin!', redirect: '/dashboard' });
-  } else if (username === 'klien' && password === 'klien123') {
-    req.session.isLoggedIn = true;
-    req.session.username = username;
-    req.session.role = 'admin_grup';
-    return res.json({ success: true, message: 'Login berhasil sebagai Admin Grup!', redirect: '/dashboard' });
-  } else {
-    return res.status(401).json({ success: false, message: 'Username atau Password salah!' });
+    req.session.userId = 'superadmin';
+    return res.json({ success: true, message: 'Login Super Admin!', redirect: '/dashboard' });
   }
+
+  let usersDB = loadUsers();
+  if (usersDB[username] && usersDB[username].password === password) {
+    req.session.isLoggedIn = true;
+    req.session.role = usersDB[username].role;
+    req.session.userId = username;
+    req.session.groupId = usersDB[username].groupId;
+    return res.json({ success: true, message: 'Login berhasil!', redirect: '/dashboard' });
+  }
+
+  return res.status(401).json({ success: false, message: 'ID atau Password salah!' });
 });
 
 app.get('/api/logout', (req, res) => {
@@ -75,8 +79,9 @@ app.get('/api/logout', (req, res) => {
 
 app.get('/api/me', requireLogin, (req, res) => {
     res.json({
-        username: req.session.username,
-        role: req.session.role
+        username: req.session.userId,
+        role: req.session.role,
+        groupId: req.session.groupId || null
     });
 });
 
@@ -84,6 +89,14 @@ const vouchersFile = path.join(__dirname, 'vouchers.json');
 
 const loadVouchers = () => fs.existsSync(vouchersFile) ? JSON.parse(fs.readFileSync(vouchersFile)) : {};
 const saveVouchers = (data) => fs.writeFileSync(vouchersFile, JSON.stringify(data, null, 2));
+
+const usersFile = path.join(__dirname, 'users.json');
+const loadUsers = () => fs.existsSync(usersFile) ? JSON.parse(fs.readFileSync(usersFile)) : {};
+const saveUsers = (data) => fs.writeFileSync(usersFile, JSON.stringify(data, null, 2));
+
+const premiumGroupsFile = path.join(__dirname, 'premium_groups.json');
+const loadPremium = () => fs.existsSync(premiumGroupsFile) ? JSON.parse(fs.readFileSync(premiumGroupsFile)) : {};
+const savePremium = (data) => fs.writeFileSync(premiumGroupsFile, JSON.stringify(data, null, 2));
 
 app.post('/api/buatvoucher', express.json(), requireLogin, (req, res) => {
     if (req.session.role !== 'superadmin') {
@@ -112,6 +125,57 @@ app.post('/api/buatvoucher', express.json(), requireLogin, (req, res) => {
 
     saveVouchers(db);
     res.json({ success: true, message: 'Voucher berhasil dibuat!', codes: generatedCodes });
+});
+
+app.post('/api/buat-akun', express.json(), requireLogin, (req, res) => {
+    if (req.session.role !== 'superadmin') {
+        return res.status(403).json({ success: false, message: 'Hanya Super Admin!' });
+    }
+
+    const { userId, groupId, password } = req.body;
+    if (!userId || !groupId || !password) {
+        return res.status(400).json({ success: false, message: 'Semua kolom wajib diisi!' });
+    }
+
+    let usersDB = loadUsers();
+    usersDB[userId] = {
+        password: password,
+        role: 'admin_grup',
+        groupId: groupId,
+        createdAt: Date.now()
+    };
+    saveUsers(usersDB);
+    res.json({ success: true, message: `Akun untuk ${userId} berhasil dibuat!` });
+});
+
+app.post('/api/redeem', express.json(), requireLogin, (req, res) => {
+    if (req.session.role !== 'admin_grup') {
+        return res.status(403).json({ success: false, message: 'Hanya Admin Grup yang bisa redeem!' });
+    }
+
+    const { kode } = req.body;
+    const groupId = req.session.groupId;
+
+    let db = loadVouchers();
+    if (!db[kode] || db[kode].status !== 'available') {
+        return res.status(400).json({ success: false, message: 'Voucher tidak valid atau sudah dipakai!' });
+    }
+
+    let premiumDB = loadPremium();
+    const durationMs = db[kode].duration * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const currentExpired = premiumDB[groupId] ? premiumDB[groupId].expiredAt : now;
+    const newExpired = (currentExpired > now ? currentExpired : now) + durationMs;
+
+    premiumDB[groupId] = { expiredAt: newExpired };
+    db[kode].status = 'used';
+    db[kode].usedBy = groupId;
+    db[kode].usedAt = now;
+
+    savePremium(premiumDB);
+    saveVouchers(db);
+
+    res.json({ success: true, message: 'Berhasil! Bot aktif di grup Anda sampai: ' + new Date(newExpired).toLocaleDateString('id-ID') });
 });
 
 app.get('/dashboard', requireLogin, (req, res) => {
@@ -185,6 +249,17 @@ app.get('/dashboard', requireLogin, (req, res) => {
         <input id="input-jumlah" type="number" placeholder="Jumlah voucher" value="1" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
         <button onclick="generateVoucher()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎫 Buat Voucher</button>
         <div id="voucher-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-orange-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400 mb-3">👤 Buat Akun Klien</p>
+      <div class="space-y-3">
+        <input id="input-uid" type="text" placeholder="ID Bot User" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="input-gid" type="text" placeholder="ID Grup (contoh: 62812xxx-123456@g.us)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="input-pass" type="text" placeholder="Password" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200">
+        <button onclick="generateAkun()" class="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">👤 Buat Akun</button>
+        <div id="akun-result" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
 
@@ -292,6 +367,63 @@ app.get('/dashboard', requireLogin, (req, res) => {
       } catch (error) {
         document.getElementById('voucher-result').textContent = 'Terjadi kesalahan jaringan!';
         console.error(error);
+      }
+    }
+
+    async function generateAkun() {
+      const userId = document.getElementById('input-uid').value.trim();
+      const groupId = document.getElementById('input-gid').value.trim();
+      const password = document.getElementById('input-pass').value.trim();
+
+      if (!userId || !groupId || !password) {
+        return alert('Semua kolom wajib diisi!');
+      }
+
+      try {
+        const res = await fetch('/api/buat-akun', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, groupId, password })
+        });
+        const data = await res.json();
+        const resultDiv = document.getElementById('akun-result');
+        if (data.success) {
+          resultDiv.textContent = '✅ ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('input-uid').value = '';
+          document.getElementById('input-gid').value = '';
+          document.getElementById('input-pass').value = '';
+        } else {
+          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('akun-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    async function redeemVoucher() {
+      const kode = document.getElementById('kodeVoucher').value.trim();
+      if (!kode) return alert('Masukkan kode voucher!');
+
+      try {
+        const res = await fetch('/api/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kode })
+        });
+        const data = await res.json();
+        const resultDiv = document.getElementById('redeem-result');
+        if (data.success) {
+          resultDiv.textContent = '✅ ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('kodeVoucher').value = '';
+        } else {
+          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('redeem-result').textContent = 'Gagal terhubung ke server.';
       }
     }
 
