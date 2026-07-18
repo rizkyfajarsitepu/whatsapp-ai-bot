@@ -365,21 +365,23 @@ app.post('/api/rpg/suntik', express.json(), (req, res) => {
 
 app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
   let { jid } = req.body;
-  console.log(`\n[🔍 INTEL] Menerima request pencarian untuk input: "${jid}"`);
-
   if (!jid) return res.status(400).json({ error: 'JID / Nomor wajib diisi' });
 
-  let targetNumber = jid.split('@')[0].replace(/[^0-9]/g, '');
-  if (targetNumber.startsWith('0')) {
-    targetNumber = '62' + targetNumber.substring(1);
+  let cleanJid = jid.trim();
+  let isLid = cleanJid.endsWith('@lid');
+  let targetNumber = "";
+
+  if (!isLid) {
+    targetNumber = cleanJid.split('@')[0].replace(/[^0-9]/g, '');
+    if (targetNumber.startsWith('0')) {
+      targetNumber = '62' + targetNumber.substring(1);
+    }
+    cleanJid = targetNumber + '@s.whatsapp.net';
   }
-  console.log(`[🔍 INTEL] Nomor setelah di-sanitasi: "${targetNumber}"`);
 
   try {
     const groups = await dashboardSock.groupFetchAllParticipating();
     const groupIds = Object.keys(groups);
-    console.log(`[🔍 INTEL] Bot saat ini terdeteksi berada di ${groupIds.length} grup.`);
-
     const userGroups = [];
 
     for (const groupId of groupIds) {
@@ -387,32 +389,28 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
         const groupMeta = await dashboardSock.groupMetadata(groupId);
         const participants = groupMeta.participants || [];
 
-        const allIds = participants.map(p => typeof p === 'object' && p !== null ? p.id : p);
-        console.log(`\n[🔍 INTEL BONGKAR DATA] Daftar ID di Grup "${groupMeta.subject}":\n`, allIds);
-
         let found = false;
         for (const p of participants) {
           const participantId = typeof p === 'object' && p !== null ? p.id : p;
-          const participantNumber = String(participantId).split('@')[0].split(':')[0];
 
-          if (participantNumber === targetNumber) {
-            found = true;
-            break;
+          if (isLid) {
+            if (participantId === cleanJid) found = true;
+          } else {
+            const participantNumber = String(participantId).split('@')[0].split(':')[0];
+            if (participantNumber === targetNumber) found = true;
           }
+          if (found) break;
         }
 
         if (found) {
           userGroups.push(groupMeta.subject || 'Grup Tanpa Nama');
         }
       } catch (err) {
-        console.log(`[⚠️ INTEL] Gagal mengambil metadata detail untuk grup ${groupId}`);
+        // Abaikan error metadata
       }
     }
-
-    console.log(`[🔍 INTEL] Hasil pencarian: Ditemukan di ${userGroups.length} grup.`);
     res.json({ success: true, groups: userGroups });
   } catch (error) {
-    console.error('[❌ ERROR CEK USER]', error);
     res.status(500).json({ error: 'Gagal mengecek data grup user' });
   }
 });

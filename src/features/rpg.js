@@ -70,29 +70,33 @@ export const getRpgDB = () => {
 };
 
 export const suntikXP = (sender, amountXp) => {
-    if (!sender.endsWith('@s.whatsapp.net')) {
-        sender = sender + '@s.whatsapp.net';
+    let cleanJid = sender.trim();
+
+    if (!cleanJid.endsWith('@lid')) {
+        let parsedNumber = cleanJid.split('@')[0].replace(/[^0-9]/g, '');
+        if (parsedNumber.startsWith('0')) {
+            parsedNumber = '62' + parsedNumber.substring(1);
+        }
+        cleanJid = parsedNumber + '@s.whatsapp.net';
     }
 
-    if (!rpgDB[sender]) {
-        rpgDB[sender] = { xp: 0, level: 0, lastChat: 0 };
+    if (!rpgDB[cleanJid]) {
+        rpgDB[cleanJid] = { xp: 0, level: 0, lastChat: 0 };
     }
 
     const xpToAdd = parseInt(amountXp);
     if (isNaN(xpToAdd) || xpToAdd <= 0) throw new Error("Jumlah XP tidak valid!");
 
-    rpgDB[sender].xp += xpToAdd;
+    rpgDB[cleanJid].xp += xpToAdd;
 
-    const newLevel = Math.floor(Math.sqrt(rpgDB[sender].xp / 10));
-    rpgDB[sender].level = newLevel;
-
+    const newLevel = Math.floor(Math.sqrt(rpgDB[cleanJid].xp / 10));
+    rpgDB[cleanJid].level = newLevel;
     saveDB();
-    console.log(`[💉 ORANG DALAM] Berhasil suntik ${xpToAdd} XP ke ${sender}`);
 
     return {
-        jid: sender,
-        xp: rpgDB[sender].xp,
-        level: rpgDB[sender].level,
+        jid: cleanJid,
+        xp: rpgDB[cleanJid].xp,
+        level: rpgDB[cleanJid].level,
         pangkat: getPangkat(newLevel)
     };
 };
