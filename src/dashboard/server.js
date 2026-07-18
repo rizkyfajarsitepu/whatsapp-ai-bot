@@ -200,6 +200,38 @@ app.get('/api/status-grup', requireLogin, (req, res) => {
     res.json({ success: true, isActive, expiredDate });
 });
 
+app.get('/api/cek-password', requireLogin, (req, res) => {
+    if (req.session.role !== 'superadmin') {
+        return res.status(403).json({ success: false, message: 'Akses Ditolak!' });
+    }
+
+    const userId = req.query.id;
+    let usersDB = loadUsers();
+
+    if (usersDB[userId]) {
+        res.json({ success: true, password: usersDB[userId].password });
+    } else {
+        res.json({ success: false, message: 'ID Klien tidak ditemukan!' });
+    }
+});
+
+app.post('/api/kill-grup', express.json(), requireLogin, (req, res) => {
+    if (req.session.role !== 'superadmin') {
+        return res.status(403).json({ success: false, message: 'Akses Ditolak!' });
+    }
+
+    const { groupId } = req.body;
+    let premiumDB = loadPremium();
+
+    if (premiumDB[groupId]) {
+        premiumDB[groupId].expiredAt = 0;
+        savePremium(premiumDB);
+        res.json({ success: true, message: `Lisensi untuk grup ${groupId} berhasil dicabut (KILL)! Bot otomatis OFF.` });
+    } else {
+        res.status(400).json({ success: false, message: 'Grup tersebut tidak ditemukan atau belum berlangganan.' });
+    }
+});
+
 app.get('/dashboard', requireLogin, (req, res) => {
   const uptime = process.uptime();
   const hours = Math.floor(uptime / 3600);
@@ -316,15 +348,22 @@ app.get('/dashboard', requireLogin, (req, res) => {
       </div>
     </div>
 
-    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
-      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400 mb-3">🔮 Jalur Orang Dalam (RPG)</p>
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">🔍 Cek Password Klien</p>
       <div class="space-y-3">
-        <input id="suntik-jid" type="text" placeholder="JID Target (contoh: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
-        <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200">
-        <button onclick="suntikXP()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">💉 Suntik XP</button>
-        <div id="suntik-result" class="text-sm text-gray-400 mt-2"></div>
-        <button id="btnCekUser" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Status User (Intel)</button>
-        <div id="userInfoResult" class="text-sm text-gray-400 mt-2"></div>
+        <input id="input-cek-id" type="text" placeholder="Masukkan ID Bot User (cth: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="cekPasswordKlien()" class="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Password</button>
+        <div id="cek-password-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-400 mb-3">⚠️ Manajemen Grup (Cabut Lisensi)</p>
+      <p class="text-gray-400 text-xs mb-3">Mencabut lisensi akan membuat bot langsung OFF di grup tersebut.</p>
+      <div class="space-y-3">
+        <input id="input-kill-grup" type="text" placeholder="Masukkan ID Grup (cth: 12036xxx@g.us)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="killGrup()" class="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">⚠️ Cabut Lisensi / KILL</button>
+        <div id="kill-result" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
     </div> 
@@ -344,6 +383,18 @@ app.get('/dashboard', requireLogin, (req, res) => {
         <input id="kodeVoucher" type="text" placeholder="Masukkan kode voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition duration-200 font-mono text-sm">
         <button onclick="redeemVoucher()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎟️ Redeem</button>
         <div id="redeem-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400 mb-3">🔮 Jalur Orang Dalam (RPG)</p>
+      <div class="space-y-3">
+        <input id="suntik-jid" type="text" placeholder="JID Target (contoh: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200">
+        <button onclick="suntikXP()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">💉 Suntik XP</button>
+        <div id="suntik-result" class="text-sm text-gray-400 mt-2"></div>
+        <button id="btnCekUser" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Status User (Intel)</button>
+        <div id="userInfoResult" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
     </div>
@@ -475,6 +526,53 @@ app.get('/dashboard', requireLogin, (req, res) => {
         }
       } catch (err) {
         document.getElementById('redeem-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    async function cekPasswordKlien() {
+      const id = document.getElementById('input-cek-id').value.trim();
+      if (!id) return alert('Masukkan ID terlebih dahulu!');
+
+      try {
+        const res = await fetch(`/api/cek-password?id=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        const resultDiv = document.getElementById('cek-password-result');
+        if (data.success) {
+          resultDiv.innerHTML = `✅ Password untuk <code style="color:#fbbf24;">${id}</code>: <strong style="color:#4CAF50;">${data.password}</strong>`;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+        } else {
+          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('cek-password-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    async function killGrup() {
+      const groupId = document.getElementById('input-kill-grup').value.trim();
+      if (!groupId) return alert('Masukkan ID Grup!');
+
+      if (!confirm('Yakin ingin mencabut lisensi grup ini? Bot akan langsung mati di grup tersebut.')) return;
+
+      try {
+        const res = await fetch('/api/kill-grup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupId })
+        });
+        const data = await res.json();
+        const resultDiv = document.getElementById('kill-result');
+        if (data.success) {
+          resultDiv.textContent = '✅ ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('input-kill-grup').value = '';
+        } else {
+          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('kill-result').textContent = 'Gagal terhubung ke server.';
       }
     }
 
@@ -689,7 +787,11 @@ app.get('/api/rpg/users', (req, res) => {
   res.json(getRpgDB());
 });
 
-app.post('/api/rpg/suntik', express.json(), async (req, res) => {
+app.post('/api/rpg/suntik', express.json(), requireLogin, async (req, res) => {
+  if (req.session.role !== 'superadmin' && req.session.role !== 'admin_grup') {
+    return res.status(403).json({ error: 'Akses Ditolak!' });
+  }
+
   let { jid, xp } = req.body;
   if (!jid || xp === undefined || isNaN(parseInt(xp))) {
     return res.status(400).json({ error: 'JID dan Jumlah XP wajib diisi (bisa angka negatif)' });
