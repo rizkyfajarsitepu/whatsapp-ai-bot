@@ -5,7 +5,7 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
     const { id, participants, action } = update;
 
     console.log(`\n[🚨 BAILEYS EVENT] Mendapat update dari grup: ${id}`);
-    console.log(`[🚨 BAILEYS EVENT] Aksi: ${action} | Peserta:`, participants);
+    console.log(`[🚨 BAILEYS EVENT] Aksi: ${action} | Peserta Detail:`, JSON.stringify(participants, null, 2));
 
     if (action !== 'add') return;
 
@@ -26,19 +26,21 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
 
         let ppUrl;
         try {
+          console.log(`[🔍 DEBUG] Mencoba mengunduh DP untuk: ${targetJid} ...`);
           ppUrl = await Promise.race([
             sock.profilePictureUrl(targetJid, 'image'),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout DP')), 2000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_DP')), 5000))
           ]);
         } catch (err) {
+          console.log(`[⚠️ GAGAL DP] Gagal mengambil foto untuk ${targetJid}. Alasan: ${err.message}`);
           ppUrl = null;
         }
 
         if (!ppUrl) {
-          console.log(`[ℹ️ INFO] ${targetJid} tidak ada foto profil. Memakai avatar default.`);
+          console.log(`[ℹ️ INFO] Menggunakan avatar default untuk ${targetJid}.`);
           ppUrl = 'https://i.ibb.co/3Fh9V6p/avatar-contact.png';
         } else {
-          console.log(`[ℹ️ INFO] Mengunduh DP untuk ${targetJid}...`);
+          console.log(`[✅ SUKSES DP] Foto profil ${targetJid} berhasil diunduh!`);
         }
 
         const canvas = createCanvas(800, 300);
