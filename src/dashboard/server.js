@@ -272,12 +272,12 @@ app.get('/', (req, res) => {
         const result = await res.json();
 
         if (result.success) {
-          resultDiv.innerText = `✅ Berhasil menyuntikkan XP! Jabatan target sekarang: ${result.data.pangkat}`;
+          resultDiv.innerText = '✅ Berhasil menyuntikkan XP! Jabatan target sekarang: ' + result.data.pangkat;
           resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('suntik-jid').value = '';
           document.getElementById('suntik-xp').value = '';
         } else {
-          resultDiv.innerText = `❌ Gagal: ${result.error}`;
+          resultDiv.innerText = '❌ Gagal: ' + result.error;
           resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (err) {
