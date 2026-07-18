@@ -57,12 +57,20 @@ export const handleLeveling = async (sock, msg, featureToggles) => {
     }
 };
 
-export const getProfileStats = (sender) => {
-    const user = rpgDB[sender] || { xp: 0, level: 0 };
+export const getProfileStats = (targetJid, isAdmin = false) => {
+    const user = rpgDB[targetJid] || { xp: 0, level: 0 };
     const nextLevelXp = Math.pow(user.level + 1, 2) * 10;
     const pangkat = getPangkat(user.level);
-    
-    return `📊 *KARTU TANDA PEJABAT (KTP)* 📊\n\n👤 Nama: @${sender.split('@')[0]}\n🎖️ Jabatan: *${pangkat}*\n📈 Level: ${user.level}\n✨ XP: ${user.xp} / ${nextLevelXp}\n\n_Rajin-rajinlah rapat (chat) di grup agar cepat naik jabatan!_`;
+
+    let ktpMsg = `📊 *KARTU TANDA PEJABAT (KTP)* 📊\n\n👤 Nama: @${targetJid.split('@')[0]}\n`;
+
+    if (isAdmin) {
+        ktpMsg += `🆔 ID Sistem: ${targetJid}\n`;
+    }
+
+    ktpMsg += `🎖️ Jabatan: *${pangkat}*\n📈 Level: ${user.level}\n✨ XP: ${user.xp} / ${nextLevelXp}\n\n_Rajin-rajinlah rapat (chat) di grup agar cepat naik jabatan!_`;
+
+    return ktpMsg;
 };
 
 export const getRpgDB = () => {

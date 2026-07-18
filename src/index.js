@@ -148,8 +148,16 @@ async function handleMessage(sock, msg) {
     }
 
     const sender = msg.key.participant || msg.key.remoteJid;
-    const statsMsg = getProfileStats(sender);
-    await sock.sendMessage(msg.key.remoteJid, { text: statsMsg, mentions: [sender] }, { quoted: msg });
+
+    const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    const targetJid = mentionedJid.length > 0 ? mentionedJid[0] : sender;
+
+    const groupMetadata = await sock.groupMetadata(msg.key.remoteJid).catch(() => null);
+    const groupAdmins = groupMetadata ? groupMetadata.participants.filter(p => p.admin !== null).map(p => p.id) : [];
+    const isAdmin = groupAdmins.includes(sender);
+
+    const statsMsg = getProfileStats(targetJid, isAdmin);
+    await sock.sendMessage(msg.key.remoteJid, { text: statsMsg, mentions: [targetJid] }, { quoted: msg });
     return;
   }
 
