@@ -98,7 +98,7 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
                 // Pesan Caption Berbeda
                 const captionMsg = isAdd 
                     ? `Halo @${memberName}! 👋\n\nSelamat datang di grup *${groupName}*.\nJangan lupa perkenalkan diri ya!`
-                    : `Selamat tinggal @${memberName} 🥀\n\nSemoga sukses di alam sana.`;
+                    : `Selamat tinggal @${memberName} 🥀\n\nSemoga tenang di alam sana.`;
 
                 await sock.sendMessage(id, {
                     image: buffer,
