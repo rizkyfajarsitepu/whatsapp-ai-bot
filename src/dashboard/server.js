@@ -357,13 +357,12 @@ app.post('/api/rpg/suntik', express.json(), async (req, res) => {
   if (targetNumber.startsWith('0')) targetNumber = '62' + targetNumber.substring(1);
   const cleanJid = jid.endsWith('@lid') ? jid : targetNumber + '@s.whatsapp.net';
 
-  const rpgDB = getRpgDB();
-  const oldLevel = rpgDB[cleanJid] ? rpgDB[cleanJid].level : 0;
+  const oldLevel = getRpgDB()[cleanJid] ? getRpgDB()[cleanJid].level : 0;
 
   try {
     const updatedUser = suntikXP(cleanJid, xp);
 
-    if (updatedUser.level > oldLevel) {
+    if (updatedUser.level !== oldLevel) {
       const groups = await dashboardSock.groupFetchAllParticipating();
       for (const groupId in groups) {
         const group = groups[groupId];
@@ -373,14 +372,18 @@ app.post('/api/rpg/suntik', express.json(), async (req, res) => {
         });
 
         if (isMember) {
-          const alertMsg = `🎉 *PROMOSI JABATAN* 🎉\n\nSelamat kepada @${cleanJid.split('@')[0]}!\nJabatan anda kini naik menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Tetap mengabdi untuk rakyat ya!_`;
+          const isPromotion = updatedUser.level > oldLevel;
+          const alertMsg = isPromotion
+            ? `🎉 *PROMOSI JABATAN* 🎉\n\nSelamat kepada @${cleanJid.split('@')[0]}!\nJabatan anda kini naik menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Tetap mengabdi untuk rakyat ya!_`
+            : `⚠️ *SANKSI DISIPLIN* ⚠️\n\nPerhatian! @${cleanJid.split('@')[0]} telah dijatuhi sanksi.\nJabatan anda kini turun menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Segera perbaiki kinerja anda di grup!_`;
+
           await dashboardSock.sendMessage(groupId, { text: alertMsg, mentions: [cleanJid] });
           break;
         }
       }
     }
 
-    res.json({ success: true, message: `Suntik sukses! Jabatan: ${updatedUser.pangkat}`, data: updatedUser });
+    res.json({ success: true, message: `Operasi sukses! Jabatan: ${updatedUser.pangkat}`, data: updatedUser });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
