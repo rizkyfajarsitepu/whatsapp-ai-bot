@@ -122,6 +122,8 @@ app.get('/', (req, res) => {
         <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200">
         <button onclick="suntikXP()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">💉 Suntik XP</button>
         <div id="suntik-result" class="text-sm text-gray-400 mt-2"></div>
+        <button id="btnCekUser" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Status User (Intel)</button>
+        <div id="userInfoResult" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
   </div>
@@ -286,6 +288,37 @@ app.get('/', (req, res) => {
       }
     }
 
+    document.getElementById('btnCekUser').addEventListener('click', async () => {
+      const jid = document.getElementById('suntik-jid').value.trim();
+      const resultDiv = document.getElementById('userInfoResult');
+
+      if (!jid) return alert('Masukkan nomor WhatsApp dulu!');
+
+      resultDiv.innerHTML = '<span style="color: yellow;">Mencari data keanggotaan grup... 🔍</span>';
+
+      try {
+        const response = await fetch('/api/rpg/cek-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jid })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          if (data.groups.length > 0) {
+            resultDiv.innerHTML = '<span style="color: #00ffcc;">✅ Ditemukan di ' + data.groups.length + ' Grup:</span><br>' +
+              '<ul style="color: white; margin-top: 5px;"><li>' + data.groups.join('</li><li>') + '</li></ul>';
+          } else {
+            resultDiv.innerHTML = '<span style="color: #ff3366;">⚠️ User tidak ditemukan di grup manapun yang memiliki bot ini.</span>';
+          }
+        } else {
+          resultDiv.innerHTML = '<span style="color: red;">Error: ' + data.error + '</span>';
+        }
+      } catch (err) {
+        resultDiv.innerHTML = '<span style="color: red;">Gagal terhubung ke server.</span>';
+      }
+    });
+
     loadGroups();
   </script>
 </body>
@@ -327,6 +360,33 @@ app.post('/api/rpg/suntik', express.json(), (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
+  let { jid } = req.body;
+  if (!jid) return res.status(400).json({ error: 'JID / Nomor wajib diisi' });
+
+  if (!jid.endsWith('@s.whatsapp.net')) {
+    jid = jid + '@s.whatsapp.net';
+  }
+
+  try {
+    const groups = await dashboardSock.groupFetchAllParticipating();
+    const userGroups = [];
+
+    for (const groupId in groups) {
+      const group = groups[groupId];
+      const isMember = group.participants.some(p => p.id === jid);
+      if (isMember) {
+        userGroups.push(group.subject || 'Grup Tanpa Nama');
+      }
+    }
+
+    res.json({ success: true, groups: userGroups });
+  } catch (error) {
+    console.error('[❌ ERROR CEK USER]', error);
+    res.status(500).json({ error: 'Gagal mengecek data grup user' });
   }
 });
 

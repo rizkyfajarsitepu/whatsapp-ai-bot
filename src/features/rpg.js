@@ -70,16 +70,24 @@ export const getRpgDB = () => {
 };
 
 export const suntikXP = (sender, amountXp) => {
+    if (!sender.endsWith('@s.whatsapp.net')) {
+        sender = sender + '@s.whatsapp.net';
+    }
+
     if (!rpgDB[sender]) {
         rpgDB[sender] = { xp: 0, level: 0, lastChat: 0 };
     }
 
-    rpgDB[sender].xp += parseInt(amountXp);
+    const xpToAdd = parseInt(amountXp);
+    if (isNaN(xpToAdd) || xpToAdd <= 0) throw new Error("Jumlah XP tidak valid!");
+
+    rpgDB[sender].xp += xpToAdd;
 
     const newLevel = Math.floor(Math.sqrt(rpgDB[sender].xp / 10));
     rpgDB[sender].level = newLevel;
 
     saveDB();
+    console.log(`[💉 ORANG DALAM] Berhasil suntik ${xpToAdd} XP ke ${sender}`);
 
     return {
         jid: sender,
