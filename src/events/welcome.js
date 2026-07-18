@@ -1,4 +1,5 @@
 import { createCanvas, loadImage } from 'canvas';
+import { verifyGroupStatus } from '../core/groupManager.js';
 
 export const handleWelcomeEvent = (sock, featureToggles) => {
     sock.ev.on('group-participants.update', async (update) => {
@@ -23,6 +24,12 @@ export const handleWelcomeEvent = (sock, featureToggles) => {
             
             const groupMetadata = await sock.groupMetadata(id);
             const groupName = groupMetadata.subject || 'Grup WhatsApp';
+
+            const isVerified = verifyGroupStatus(id, groupName);
+            if (!isVerified) {
+                console.log(`[⛔ BLOKIR] Mengabaikan event Welcome di grup tidak terverifikasi: ${groupName}`);
+                return;
+            }
 
             for (let num of participants) {
                 const jid = typeof num === 'object' && num !== null ? num.id : num;

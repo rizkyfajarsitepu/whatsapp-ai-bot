@@ -18,6 +18,7 @@ import { activePersonas, handleToggleMode, handlePersonaChat } from './features/
 import { startDashboard } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
+import { verifyGroupStatus } from './core/groupManager.js';
 
 export const menfessSessions = new Map();
 
@@ -104,6 +105,28 @@ async function handleMessage(sock, msg) {
   const senderName = msg.pushName || 'User';
   const text = getTextContent(msg);
   const isImage = !!msg.message?.imageMessage;
+  const isGroup = chatId.endsWith('@g.us');
+
+  if (isGroup) {
+    const groupId = chatId;
+    const groupMetadata = await sock.groupMetadata(groupId).catch(() => null);
+    const groupName = groupMetadata ? groupMetadata.subject : 'Grup';
+    const groupAdmins = groupMetadata ? groupMetadata.participants.filter(p => p.admin !== null).map(p => p.id) : [];
+    const sender = msg.key.participant || chatId;
+    const isAdmin = groupAdmins.includes(sender);
+
+    const isVerified = verifyGroupStatus(groupId, groupName);
+
+    if (!isVerified) {
+      const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || "";
+
+      if (isAdmin && textMessage.trim().startsWith('!')) {
+        await sock.sendMessage(groupId, { text: "Grup anda belum terverifikasi" }, { quoted: msg });
+      }
+
+      return;
+    }
+  }
 
   if (isImage && !text.startsWith('!')) {
     if (!featureToggles.ai_chat) return;

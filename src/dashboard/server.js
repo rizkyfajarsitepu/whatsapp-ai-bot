@@ -4,6 +4,7 @@ import basicAuth from 'express-basic-auth';
 import { Server } from 'socket.io';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
+import { getGroupsDB, toggleGroupVerification } from '../core/groupManager.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -105,6 +106,13 @@ app.get('/', (req, res) => {
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400 mb-3">⚙️ Manajemen Fitur</p>
       <div id="toggle-container"></div>
     </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">👥 Manajemen Grup</p>
+      <div id="group-container">
+        <p class="text-gray-500 text-sm">Memuat daftar grup...</p>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -171,6 +179,66 @@ app.get('/', (req, res) => {
         container.appendChild(div);
       }
     });
+
+    async function loadGroups() {
+      const container = document.getElementById('group-container');
+      try {
+        const res = await fetch('/api/groups');
+        const groups = await res.json();
+        const entries = Object.entries(groups);
+
+        if (entries.length === 0) {
+          container.innerHTML = '<p class="text-gray-500 text-sm">Belum ada grup yang terdeteksi.</p>';
+          return;
+        }
+
+        container.innerHTML = '';
+        entries.forEach(([groupId, data]) => {
+          const div = document.createElement('div');
+          div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
+
+          const label = document.createElement('span');
+          label.className = 'text-white font-semibold text-sm flex-1 truncate mr-2';
+          label.innerText = data.name || groupId.split('@')[0];
+
+          const badge = document.createElement('span');
+          badge.className = 'text-xs text-gray-400 mr-3';
+          badge.innerText = data.verified ? 'TERVERIFIKASI' : 'BELUM';
+
+          const btn = document.createElement('button');
+          btn.className = 'px-4 py-1 rounded font-bold transition duration-300 shrink-0 ' + (data.verified ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
+          btn.innerText = data.verified ? 'ON' : 'OFF';
+
+          btn.onclick = async () => {
+            btn.disabled = true;
+            btn.innerText = '...';
+            try {
+              const res = await fetch('/api/groups/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId }),
+              });
+              const result = await res.json();
+              if (result.success) {
+                loadGroups();
+              }
+            } catch (err) {
+              alert('Gagal toggle grup');
+              loadGroups();
+            }
+          };
+
+          div.appendChild(label);
+          div.appendChild(badge);
+          div.appendChild(btn);
+          container.appendChild(div);
+        });
+      } catch (err) {
+        container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat daftar grup.</p>';
+      }
+    }
+
+    loadGroups();
   </script>
 </body>
 </html>`);
@@ -182,6 +250,16 @@ app.get('/api/stats', (req, res) => {
     uptime: process.uptime(),
     uptimeFormatted: `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`,
   });
+});
+
+app.get('/api/groups', (req, res) => {
+  res.json(getGroupsDB());
+});
+
+app.post('/api/groups/toggle', express.json(), (req, res) => {
+  const { groupId } = req.body;
+  const newStatus = toggleGroupVerification(groupId);
+  res.json({ success: true, verified: newStatus });
 });
 
 let dashboardSock = null;
