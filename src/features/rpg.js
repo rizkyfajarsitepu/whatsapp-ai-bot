@@ -93,9 +93,9 @@ export const suntikXP = (sender, amountXp) => {
     }
 
     const xpToAdd = parseInt(amountXp);
-    if (isNaN(xpToAdd) || xpToAdd <= 0) throw new Error("Jumlah XP tidak valid!");
+    if (isNaN(xpToAdd)) throw new Error("Jumlah XP tidak valid!");
 
-    rpgDB[cleanJid].xp += xpToAdd;
+    rpgDB[cleanJid].xp = Math.max(0, rpgDB[cleanJid].xp + xpToAdd);
 
     const newLevel = Math.floor(Math.sqrt(rpgDB[cleanJid].xp / 10));
     rpgDB[cleanJid].level = newLevel;

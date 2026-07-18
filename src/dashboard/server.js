@@ -349,7 +349,9 @@ app.get('/api/rpg/users', (req, res) => {
 
 app.post('/api/rpg/suntik', express.json(), async (req, res) => {
   let { jid, xp } = req.body;
-  if (!jid || !xp) return res.status(400).json({ error: 'JID dan XP wajib diisi' });
+  if (!jid || xp === undefined || isNaN(parseInt(xp))) {
+    return res.status(400).json({ error: 'JID dan Jumlah XP wajib diisi (bisa angka negatif)' });
+  }
 
   let targetNumber = jid.split('@')[0].replace(/[^0-9]/g, '');
   if (targetNumber.startsWith('0')) targetNumber = '62' + targetNumber.substring(1);
