@@ -3,6 +3,7 @@ import express from 'express';
 import session from 'express-session';
 import { Server } from 'socket.io';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
@@ -79,6 +80,40 @@ app.get('/api/me', requireLogin, (req, res) => {
     });
 });
 
+const vouchersFile = path.join(__dirname, 'vouchers.json');
+
+const loadVouchers = () => fs.existsSync(vouchersFile) ? JSON.parse(fs.readFileSync(vouchersFile)) : {};
+const saveVouchers = (data) => fs.writeFileSync(vouchersFile, JSON.stringify(data, null, 2));
+
+app.post('/api/buatvoucher', express.json(), requireLogin, (req, res) => {
+    if (req.session.role !== 'superadmin') {
+        return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+    }
+
+    const { durasi, jumlah } = req.body;
+    const days = parseInt(durasi) || 30;
+    const amount = parseInt(jumlah) || 1;
+
+    let db = loadVouchers();
+    let generatedCodes = [];
+
+    for (let i = 0; i < amount; i++) {
+        const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const code = `RYZ-${days}D-${randomStr}`;
+
+        db[code] = {
+            duration: days,
+            status: 'available',
+            createdAt: Date.now(),
+            usedBy: null
+        };
+        generatedCodes.push(code);
+    }
+
+    saveVouchers(db);
+    res.json({ success: true, message: 'Voucher berhasil dibuat!', codes: generatedCodes });
+});
+
 app.get('/dashboard', requireLogin, (req, res) => {
   const uptime = process.uptime();
   const hours = Math.floor(uptime / 3600);
@@ -146,9 +181,9 @@ app.get('/dashboard', requireLogin, (req, res) => {
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-3">🎫 Buat Voucher</p>
       <div class="space-y-3">
-        <input id="voucherDuration" type="number" placeholder="Durasi (hari)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
-        <input id="voucherJumlah" type="number" placeholder="Jumlah voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
-        <button onclick="buatVoucher()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎫 Buat Voucher</button>
+        <input id="input-durasi" type="number" placeholder="Durasi (hari)" value="30" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <input id="input-jumlah" type="number" placeholder="Jumlah voucher" value="1" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <button onclick="generateVoucher()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎫 Buat Voucher</button>
         <div id="voucher-result" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
@@ -231,6 +266,34 @@ app.get('/dashboard', requireLogin, (req, res) => {
       terminal.appendChild(div);
       terminal.scrollTop = terminal.scrollHeight;
     });
+
+    async function generateVoucher() {
+      const durasi = document.getElementById('input-durasi').value || 30;
+      const jumlah = document.getElementById('input-jumlah').value || 1;
+
+      try {
+        const response = await fetch('/api/buatvoucher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ durasi, jumlah })
+        });
+
+        const data = await response.json();
+
+        const resultDiv = document.getElementById('voucher-result');
+        if (data.success) {
+          resultDiv.innerHTML = '✅ ' + data.message + '<br><code style="color:#c084fc;font-size:13px;">' + data.codes.join('<br>') + '</code>';
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('input-jumlah').value = 1;
+        } else {
+          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (error) {
+        document.getElementById('voucher-result').textContent = 'Terjadi kesalahan jaringan!';
+        console.error(error);
+      }
+    }
 
     function kirimBroadcast() {
       const pesan = document.getElementById('broadcastText').value;
