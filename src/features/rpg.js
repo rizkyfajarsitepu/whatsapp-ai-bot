@@ -61,3 +61,27 @@ export const getProfileStats = (sender) => {
     
     return `📊 *KARTU TANDA PEJABAT (KTP)* 📊\n\n👤 Nama: @${sender.split('@')[0]}\n🎖️ Jabatan: *${pangkat}*\n📈 Level: ${user.level}\n✨ XP: ${user.xp} / ${nextLevelXp}\n\n_Rajin-rajinlah rapat (chat) di grup agar cepat naik jabatan!_`;
 };
+
+export const getRpgDB = () => {
+    return rpgDB;
+};
+
+export const suntikXP = (sender, amountXp) => {
+    if (!rpgDB[sender]) {
+        rpgDB[sender] = { xp: 0, level: 0, lastChat: 0 };
+    }
+
+    rpgDB[sender].xp += parseInt(amountXp);
+
+    const newLevel = Math.floor(Math.sqrt(rpgDB[sender].xp / 10));
+    rpgDB[sender].level = newLevel;
+
+    saveDB();
+
+    return {
+        jid: sender,
+        xp: rpgDB[sender].xp,
+        level: rpgDB[sender].level,
+        pangkat: getPangkat(newLevel)
+    };
+};

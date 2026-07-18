@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
 import { getGroupsDB, toggleGroupVerification } from '../core/groupManager.js';
+import { getRpgDB, suntikXP } from '../features/rpg.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -111,6 +112,16 @@ app.get('/', (req, res) => {
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">👥 Manajemen Grup</p>
       <div id="group-container">
         <p class="text-gray-500 text-sm">Memuat daftar grup...</p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400 mb-3">🔮 Jalur Orang Dalam (RPG)</p>
+      <div class="space-y-3">
+        <input id="suntik-jid" type="text" placeholder="JID Target (contoh: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200">
+        <button onclick="suntikXP()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">💉 Suntik XP</button>
+        <div id="suntik-result" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
   </div>
@@ -238,6 +249,43 @@ app.get('/', (req, res) => {
       }
     }
 
+    async function suntikXP() {
+      const jid = document.getElementById('suntik-jid').value.trim();
+      const xp = document.getElementById('suntik-xp').value.trim();
+      const resultDiv = document.getElementById('suntik-result');
+
+      if (!jid || !xp) {
+        resultDiv.innerText = '⚠️ JID dan XP wajib diisi!';
+        resultDiv.className = 'text-sm text-red-400 mt-2';
+        return;
+      }
+
+      resultDiv.innerText = '⏳ Memproses...';
+      resultDiv.className = 'text-sm text-yellow-400 mt-2';
+
+      try {
+        const res = await fetch('/api/rpg/suntik', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jid, xp: parseInt(xp) }),
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          resultDiv.innerText = `✅ Berhasil menyuntikkan XP! Jabatan target sekarang: ${result.data.pangkat}`;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('suntik-jid').value = '';
+          document.getElementById('suntik-xp').value = '';
+        } else {
+          resultDiv.innerText = `❌ Gagal: ${result.error}`;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        resultDiv.innerText = '❌ Gagal terhubung ke server.';
+        resultDiv.className = 'text-sm text-red-400 mt-2';
+      }
+    }
+
     loadGroups();
   </script>
 </body>
@@ -260,6 +308,26 @@ app.post('/api/groups/toggle', express.json(), (req, res) => {
   const { groupId } = req.body;
   const newStatus = toggleGroupVerification(groupId);
   res.json({ success: true, verified: newStatus });
+});
+
+app.get('/api/rpg/users', (req, res) => {
+  res.json(getRpgDB());
+});
+
+app.post('/api/rpg/suntik', express.json(), (req, res) => {
+  const { jid, xp } = req.body;
+  if (!jid || !xp) return res.status(400).json({ error: 'JID dan XP wajib diisi' });
+
+  try {
+    const updatedUser = suntikXP(jid, xp);
+    res.json({
+      success: true,
+      message: `Jalur Orang Dalam Sukses! Ditambahkan ${xp} XP.`,
+      data: updatedUser
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 let dashboardSock = null;
