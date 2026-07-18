@@ -309,6 +309,23 @@
           resultDiv.textContent = '\u2705 ' + data.message;
           resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('input-kill-grup').value = '';
+
+          const safeId = groupId.replace(/[^a-zA-Z0-9]/g, '_');
+          const statusBadge = document.getElementById('status-' + safeId);
+          const btnKill = document.getElementById('btn-kill-' + safeId);
+          const rowEl = document.getElementById('row-' + safeId);
+
+          if (statusBadge) {
+            statusBadge.innerHTML = '<span style="color:#F44336;font-weight:bold;">OFF</span>';
+          }
+          if (btnKill) {
+            btnKill.innerText = 'OFF';
+            btnKill.className = 'px-4 py-1 rounded font-bold transition duration-300 shrink-0 bg-red-500 hover:bg-red-600 text-white opacity-50 cursor-not-allowed';
+            btnKill.disabled = true;
+          }
+          if (rowEl) {
+            rowEl.style.borderLeft = '3px solid #F44336';
+          }
         } else {
           resultDiv.textContent = '\u274C ' + data.message;
           resultDiv.className = 'text-sm text-red-400 mt-2';
@@ -386,8 +403,10 @@
 
         container.innerHTML = '';
         entries.forEach(([groupId, data]) => {
+          const safeId = groupId.replace(/[^a-zA-Z0-9]/g, '_');
           const div = document.createElement('div');
           div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
+          div.id = 'row-' + safeId;
 
           const label = document.createElement('span');
           label.className = 'text-white font-semibold text-sm flex-1 truncate mr-2';
@@ -396,10 +415,12 @@
           const badge = document.createElement('span');
           badge.className = 'text-xs text-gray-400 mr-3';
           badge.innerText = data.verified ? 'TERVERIFIKASI' : 'BELUM';
+          badge.id = 'status-' + safeId;
 
           const btn = document.createElement('button');
           btn.className = 'px-4 py-1 rounded font-bold transition duration-300 shrink-0 ' + (data.verified ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
           btn.innerText = data.verified ? 'ON' : 'OFF';
+          btn.id = 'btn-kill-' + safeId;
 
           btn.onclick = async () => {
             btn.disabled = true;
