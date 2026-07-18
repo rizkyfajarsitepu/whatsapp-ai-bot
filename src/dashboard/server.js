@@ -1,7 +1,9 @@
 import http from 'http';
 import express from 'express';
-import basicAuth from 'express-basic-auth';
+import session from 'express-session';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
 import { getGroupsDB, toggleGroupVerification } from '../core/groupManager.js';
@@ -16,12 +18,59 @@ const MAX_REQUESTS = 10;
 const logHistory = [];
 const MAX_LOGS = 200;
 
-app.use(basicAuth({
-  users: { 'admin': 'admin' },
-  challenge: true,
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'ryzars-super-secret-key-2026',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false }
 }));
 
+app.use(express.static(path.join(__dirname, 'public')));
+
+const requireLogin = (req, res, next) => {
+  if (req.session && req.session.isLoggedIn) {
+    next();
+  } else {
+    res.redirect('/login');
+  }
+};
+
+app.get('/login', (req, res) => {
+  if (req.session && req.session.isLoggedIn) {
+    return res.redirect('/dashboard');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 app.get('/', (req, res) => {
+  res.redirect('/login');
+});
+
+app.post('/api/login', express.json(), (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === 'superadmin' && password === 'rahasia123') {
+    req.session.isLoggedIn = true;
+    req.session.role = 'superadmin';
+    return res.json({ success: true, message: 'Login berhasil sebagai Super Admin!', redirect: '/dashboard' });
+  } else if (username === 'klien' && password === 'klien123') {
+    req.session.isLoggedIn = true;
+    req.session.role = 'admin_grup';
+    return res.json({ success: true, message: 'Login berhasil sebagai Admin Grup!', redirect: '/dashboard' });
+  } else {
+    return res.status(401).json({ success: false, message: 'Username atau Password salah!' });
+  }
+});
+
+app.get('/api/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+app.get('/dashboard', requireLogin, (req, res) => {
   const uptime = process.uptime();
   const hours = Math.floor(uptime / 3600);
   const minutes = Math.floor((uptime % 3600) / 60);
