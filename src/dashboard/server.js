@@ -321,6 +321,9 @@ app.get('/', (req, res) => {
 
     loadGroups();
   </script>
+  <footer style="text-align: center; padding: 20px; margin-top: 50px; color: #666; font-size: 14px; border-top: 1px solid #333;">
+    <p>&copy; RyzarsAI | Version V.0.5.9</p>
+  </footer>
 </body>
 </html>`);
 });
