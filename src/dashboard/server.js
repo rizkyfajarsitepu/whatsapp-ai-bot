@@ -178,6 +178,28 @@ app.post('/api/redeem', express.json(), requireLogin, (req, res) => {
     res.json({ success: true, message: 'Berhasil! Bot aktif di grup Anda sampai: ' + new Date(newExpired).toLocaleDateString('id-ID') });
 });
 
+app.get('/api/status-grup', requireLogin, (req, res) => {
+    if (req.session.role !== 'admin_grup') {
+        return res.status(403).json({ success: false, message: 'Akses ditolak' });
+    }
+
+    const groupId = req.session.groupId;
+    let premiumDB = loadPremium();
+    const now = Date.now();
+
+    let isActive = false;
+    let expiredDate = '-';
+
+    if (premiumDB[groupId] && premiumDB[groupId].expiredAt > now) {
+        isActive = true;
+        expiredDate = new Date(premiumDB[groupId].expiredAt).toLocaleDateString('id-ID', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+    }
+
+    res.json({ success: true, isActive, expiredDate });
+});
+
 app.get('/dashboard', requireLogin, (req, res) => {
   const uptime = process.uptime();
   const hours = Math.floor(uptime / 3600);
@@ -308,6 +330,14 @@ app.get('/dashboard', requireLogin, (req, res) => {
     </div> 
 
     <div id="admin-grup-menu" style="display:none">
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400 mb-3">📊 Status Layanan Bot</p>
+      <div class="space-y-2">
+        <p class="text-gray-300 text-sm">Status: <strong id="status-badge" class="text-yellow-400">Memuat...</strong></p>
+        <p class="text-gray-300 text-sm">Masa Aktif Sampai: <strong id="status-date" class="text-gray-400">-</strong></p>
+      </div>
+    </div>
+
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-blue-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 mb-3">🎟️ Redeem Voucher</p>
       <div class="space-y-3">
@@ -323,6 +353,26 @@ app.get('/dashboard', requireLogin, (req, res) => {
     const socket = io();
     const terminal = document.getElementById('terminal-box');
 
+    function loadGroupStatus() {
+      fetch('/api/status-grup')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const badge = document.getElementById('status-badge');
+            const dateEl = document.getElementById('status-date');
+            if (data.isActive) {
+              badge.innerHTML = '<span style="color:#4CAF50;">🟢 AKTIF</span>';
+              dateEl.textContent = data.expiredDate;
+              dateEl.style.color = '#4CAF50';
+            } else {
+              badge.innerHTML = '<span style="color:#F44336;">🔴 OFF (Belum Terverifikasi / Kedaluwarsa)</span>';
+              dateEl.textContent = 'Silakan redeem voucher.';
+              dateEl.style.color = '#F44336';
+            }
+          }
+        });
+    }
+
     fetch('/api/me')
       .then(res => res.json())
       .then(data => {
@@ -332,6 +382,7 @@ app.get('/dashboard', requireLogin, (req, res) => {
         } else {
           document.getElementById('super-admin-menu').style.display = 'none';
           document.getElementById('admin-grup-menu').style.display = 'block';
+          loadGroupStatus();
         }
       });
 

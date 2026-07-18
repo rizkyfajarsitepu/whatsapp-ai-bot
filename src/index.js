@@ -20,6 +20,14 @@ import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.j
 import logger from './utils/logger.js';
 import { verifyGroupStatus } from './core/groupManager.js';
 import { handleLeveling, getProfileStats } from './features/rpg.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const premiumGroupsFile = path.join(__dirname, 'dashboard', 'premium_groups.json');
+const loadPremium = () => fs.existsSync(premiumGroupsFile) ? JSON.parse(fs.readFileSync(premiumGroupsFile, 'utf-8')) : {};
 
 export const menfessSessions = new Map();
 
@@ -142,6 +150,23 @@ async function handleMessage(sock, msg) {
       text: `📍 *INFORMASI GRUP*\n\nID Grup ini adalah:\n*${chatId}*\n\n_Silakan salin ID di atas untuk keperluan pendaftaran atau aktivasi di Dashboard._`
     });
     return;
+  }
+
+  if (chatId.endsWith('@g.us')) {
+    if (!textMessage.trim().startsWith('!idgrup')) {
+      let premiumDB = loadPremium();
+      const now = Date.now();
+      const isPremium = premiumDB[chatId] && premiumDB[chatId].expiredAt > now;
+
+      if (!isPremium) {
+        if (textMessage.includes(sock.user?.id?.split(':')[0] || 'bot') || textMessage.trim().startsWith('!')) {
+          await sock.sendMessage(chatId, {
+            text: "⚠️ *AKSES DITOLAK*\n\nBot RyzarsAI saat ini berstatus *OFF / Belum Terverifikasi* di grup ini.\n\nSilakan hubungi Super Admin untuk menyewa layanan atau redeem voucher di Dashboard."
+          });
+        }
+        return;
+      }
+    }
   }
 
   if (isGroup) {
