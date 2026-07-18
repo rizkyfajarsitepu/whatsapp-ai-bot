@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control Panel Bot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen p-4">
+  <div class="w-full max-w-4xl mx-auto space-y-6">
+    <h1 class="text-2xl font-bold text-center text-purple-400">Control Panel Bot - RyzarsAI</h1>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+        <p class="text-sm text-gray-400 uppercase tracking-wide">Status</p>
+        <p class="text-xl font-semibold mt-1 flex items-center gap-2">
+          <span class="w-3 h-3 bg-green-400 rounded-full inline-block"></span>
+          Online
+        </p>
+      </div>
+
+      <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+        <p class="text-sm text-gray-400 uppercase tracking-wide">Uptime</p>
+        <p class="text-xl font-semibold mt-1">{{UPTIME_STR}}</p>
+      </div>
+
+      <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+        <p class="text-sm text-gray-400 uppercase tracking-wide">Total Pengguna</p>
+        <p class="text-xl font-semibold mt-1" id="total-users">{{TOTAL_USERS}}</p>
+      </div>
+    </div>
+
+    <div id="super-admin-menu" style="display:none">
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-3">📢 Broadcast Panel</p>
+      <textarea id="broadcastText" rows="4" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition duration-200" placeholder="Tulis pesan broadcast di sini..."></textarea>
+      <button onclick="kirimBroadcast()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded w-full mt-3 transition duration-300 shadow-lg">📤 Kirim Broadcast</button>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-3">🎫 Buat Voucher</p>
+      <div class="space-y-3">
+        <input id="input-durasi" type="number" placeholder="Durasi (hari)" value="30" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <input id="input-jumlah" type="number" placeholder="Jumlah voucher" value="1" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <button onclick="generateVoucher()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎫 Buat Voucher</button>
+        <div id="voucher-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-orange-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400 mb-3">👤 Buat Akun Klien</p>
+      <div class="space-y-3">
+        <input id="input-uid" type="text" placeholder="ID Bot User" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="input-gid" type="text" placeholder="ID Grup (contoh: 62812xxx-123456@g.us)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="input-pass" type="text" placeholder="Password" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200">
+        <button onclick="generateAkun()" class="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">👤 Buat Akun</button>
+        <div id="akun-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 overflow-x-auto">
+      <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Daftar Pengguna</p>
+      <table class="w-full text-left">
+        <thead>
+          <tr class="border-b border-gray-600 text-gray-400 text-sm uppercase">
+            <th class="px-4 py-2">#</th>
+            <th class="px-4 py-2">ID Pengguna</th>
+            <th class="px-4 py-2">Pemakaian</th>
+          </tr>
+        </thead>
+        <tbody id="user-table-body">{{TABLE_ROWS}}</tbody>
+      </table>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+      <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Live Terminal</p>
+      <div id="terminal-box" class="bg-black text-green-400 font-mono text-sm p-4 h-64 overflow-y-auto rounded-lg shadow-lg"></div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400 mb-3">⚙️ Manajemen Fitur</p>
+      <div id="toggle-container"></div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">👥 Manajemen Grup</p>
+      <div id="group-container">
+        <p class="text-gray-500 text-sm">Memuat daftar grup...</p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">🔍 Cek Password Klien</p>
+      <div class="space-y-3">
+        <input id="input-cek-id" type="text" placeholder="Masukkan ID Bot User (cth: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="cekPasswordKlien()" class="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Password</button>
+        <div id="cek-password-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-400 mb-3">⚠️ Manajemen Grup (Cabut Lisensi)</p>
+      <p class="text-gray-400 text-xs mb-3">Mencabut lisensi akan membuat bot langsung OFF di grup tersebut.</p>
+      <div class="space-y-3">
+        <input id="input-kill-grup" type="text" placeholder="Masukkan ID Grup (cth: 12036xxx@g.us)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="killGrup()" class="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">⚠️ Cabut Lisensi / KILL</button>
+        <div id="kill-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="admin-grup-menu" style="display:none">
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400 mb-3">📊 Status Layanan Bot</p>
+      <div class="space-y-2">
+        <p class="text-gray-300 text-sm">Status: <strong id="status-badge" class="text-yellow-400">Memuat...</strong></p>
+        <p class="text-gray-300 text-sm">Masa Aktif Sampai: <strong id="status-date" class="text-gray-400">-</strong></p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-blue-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 mb-3">🎟️ Redeem Voucher</p>
+      <div class="space-y-3">
+        <input id="kodeVoucher" type="text" placeholder="Masukkan kode voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="redeemVoucher()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎟️ Redeem</button>
+        <div id="redeem-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400 mb-3">🔮 Jalur Orang Dalam (RPG)</p>
+      <div class="space-y-3">
+        <input id="suntik-jid" type="text" placeholder="JID Target (contoh: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200">
+        <button onclick="suntikXP()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">💉 Suntik XP</button>
+        <div id="suntik-result" class="text-sm text-gray-400 mt-2"></div>
+        <button id="btnCekUser" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Status User (Intel)</button>
+        <div id="userInfoResult" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    const terminal = document.getElementById('terminal-box');
+
+    function loadGroupStatus() {
+      fetch('/api/status-grup')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const badge = document.getElementById('status-badge');
+            const dateEl = document.getElementById('status-date');
+            if (data.isActive) {
+              badge.innerHTML = '<span style="color:#4CAF50;">\uD83D\uDFE2 AKTIF</span>';
+              dateEl.textContent = data.expiredDate;
+              dateEl.style.color = '#4CAF50';
+            } else {
+              badge.innerHTML = '<span style="color:#F44336;">\uD83D\uDD34 OFF (Belum Terverifikasi / Kedaluwarsa)</span>';
+              dateEl.textContent = 'Silakan redeem voucher.';
+              dateEl.style.color = '#F44336';
+            }
+          }
+        });
+    }
+
+    fetch('/api/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.role === 'superadmin') {
+          document.getElementById('super-admin-menu').style.display = 'block';
+          document.getElementById('admin-grup-menu').style.display = 'none';
+        } else {
+          document.getElementById('super-admin-menu').style.display = 'none';
+          document.getElementById('admin-grup-menu').style.display = 'block';
+          loadGroupStatus();
+        }
+      });
+
+    socket.on('terminal_log', (msg) => {
+      const div = document.createElement('div');
+      div.textContent = msg;
+      terminal.appendChild(div);
+      terminal.scrollTop = terminal.scrollHeight;
+    });
+
+    async function generateVoucher() {
+      const durasi = document.getElementById('input-durasi').value || 30;
+      const jumlah = document.getElementById('input-jumlah').value || 1;
+
+      try {
+        const response = await fetch('/api/buatvoucher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ durasi, jumlah })
+        });
+
+        const data = await response.json();
+
+        const resultDiv = document.getElementById('voucher-result');
+        if (data.success) {
+          resultDiv.innerHTML = '\u2705 ' + data.message + '<br><code style="color:#c084fc;font-size:13px;">' + data.codes.join('<br>') + '</code>';
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('input-jumlah').value = 1;
+        } else {
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (error) {
+        document.getElementById('voucher-result').textContent = 'Terjadi kesalahan jaringan!';
+        console.error(error);
+      }
+    }
+
+    async function generateAkun() {
+      const userId = document.getElementById('input-uid').value.trim();
+      const groupId = document.getElementById('input-gid').value.trim();
+      const password = document.getElementById('input-pass').value.trim();
+
+      if (!userId || !groupId || !password) {
+        return alert('Semua kolom wajib diisi!');
+      }
+
+      try {
+        const res = await fetch('/api/buat-akun', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, groupId, password })
+        });
+        const data = await res.json();
+        const resultDiv = document.getElementById('akun-result');
+        if (data.success) {
+          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('input-uid').value = '';
+          document.getElementById('input-gid').value = '';
+          document.getElementById('input-pass').value = '';
+        } else {
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('akun-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    async function redeemVoucher() {
+      const kode = document.getElementById('kodeVoucher').value.trim();
+      if (!kode) return alert('Masukkan kode voucher!');
+
+      try {
+        const res = await fetch('/api/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kode })
+        });
+        const data = await res.json();
+        const resultDiv = document.getElementById('redeem-result');
+        if (data.success) {
+          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('kodeVoucher').value = '';
+        } else {
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('redeem-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    async function cekPasswordKlien() {
+      const id = document.getElementById('input-cek-id').value.trim();
+      if (!id) return alert('Masukkan ID terlebih dahulu!');
+
+      try {
+        const res = await fetch('/api/cek-password?id=' + encodeURIComponent(id));
+        const data = await res.json();
+        const resultDiv = document.getElementById('cek-password-result');
+        if (data.success) {
+          resultDiv.innerHTML = '\u2705 Password untuk <code style="color:#fbbf24;">' + id + '</code>: <strong style="color:#4CAF50;">' + data.password + '</strong>';
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+        } else {
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('cek-password-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    async function killGrup() {
+      const groupId = document.getElementById('input-kill-grup').value.trim();
+      if (!groupId) return alert('Masukkan ID Grup!');
+
+      if (!confirm('Yakin ingin mencabut lisensi grup ini? Bot akan langsung mati di grup tersebut.')) return;
+
+      try {
+        const res = await fetch('/api/kill-grup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupId })
+        });
+        const data = await res.json();
+        const resultDiv = document.getElementById('kill-result');
+        if (data.success) {
+          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('input-kill-grup').value = '';
+        } else {
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        document.getElementById('kill-result').textContent = 'Gagal terhubung ke server.';
+      }
+    }
+
+    function kirimBroadcast() {
+      const pesan = document.getElementById('broadcastText').value;
+      if (!pesan.trim()) return alert('Pesan tidak boleh kosong!');
+
+      const konfirmasi = confirm('Yakin ingin mengirim pesan ini ke SEMUA pengguna?');
+      if (konfirmasi) {
+        socket.emit('send_broadcast', pesan);
+        document.getElementById('broadcastText').value = '';
+        alert('Memulai pengiriman! Silakan pantau progresnya di Live Log Terminal di bawah.');
+      }
+    }
+
+    socket.on('update_stats', (data) => {
+      document.getElementById('total-users').innerText = data.total;
+      const tbody = document.getElementById('user-table-body');
+      if (data.total === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Belum ada data pengguna</td></tr>';
+      } else {
+        tbody.innerHTML = data.users.map(u =>
+          '<tr class="border-b border-gray-700 hover:bg-gray-700">' +
+            '<td class="px-4 py-3">' + u.no + '</td>' +
+            '<td class="px-4 py-3 font-mono text-sm">' + u.id + '</td>' +
+            '<td class="px-4 py-3">' + u.used + ' / ' + u.limit + '</td>' +
+          '</tr>'
+        ).join('');
+      }
+    });
+
+    socket.on('init_toggles', (toggles) => {
+      const container = document.getElementById('toggle-container');
+      container.innerHTML = '';
+
+      for (const [feature, isEnabled] of Object.entries(toggles)) {
+        const div = document.createElement('div');
+        div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
+
+        const label = document.createElement('span');
+        label.className = 'text-white font-semibold uppercase text-sm';
+        label.innerText = feature.replace(/_/g, ' ');
+
+        const btn = document.createElement('button');
+        btn.className = 'px-4 py-1 rounded font-bold transition duration-300 ' + (isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
+        btn.innerText = isEnabled ? 'ON' : 'OFF';
+
+        btn.onclick = () => {
+          socket.emit('update_toggle', { feature: feature, status: !isEnabled });
+        };
+
+        div.appendChild(label);
+        div.appendChild(btn);
+        container.appendChild(div);
+      }
+    });
+
+    async function loadGroups() {
+      const container = document.getElementById('group-container');
+      try {
+        const res = await fetch('/api/groups');
+        const groups = await res.json();
+        const entries = Object.entries(groups);
+
+        if (entries.length === 0) {
+          container.innerHTML = '<p class="text-gray-500 text-sm">Belum ada grup yang terdeteksi.</p>';
+          return;
+        }
+
+        container.innerHTML = '';
+        entries.forEach(([groupId, data]) => {
+          const div = document.createElement('div');
+          div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
+
+          const label = document.createElement('span');
+          label.className = 'text-white font-semibold text-sm flex-1 truncate mr-2';
+          label.innerText = data.name || groupId.split('@')[0];
+
+          const badge = document.createElement('span');
+          badge.className = 'text-xs text-gray-400 mr-3';
+          badge.innerText = data.verified ? 'TERVERIFIKASI' : 'BELUM';
+
+          const btn = document.createElement('button');
+          btn.className = 'px-4 py-1 rounded font-bold transition duration-300 shrink-0 ' + (data.verified ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
+          btn.innerText = data.verified ? 'ON' : 'OFF';
+
+          btn.onclick = async () => {
+            btn.disabled = true;
+            btn.innerText = '...';
+            try {
+              const res = await fetch('/api/groups/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId }),
+              });
+              const result = await res.json();
+              if (result.success) {
+                loadGroups();
+              }
+            } catch (err) {
+              alert('Gagal toggle grup');
+              loadGroups();
+            }
+          };
+
+          div.appendChild(label);
+          div.appendChild(badge);
+          div.appendChild(btn);
+          container.appendChild(div);
+        });
+      } catch (err) {
+        container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat daftar grup.</p>';
+      }
+    }
+
+    async function suntikXP() {
+      const jid = document.getElementById('suntik-jid').value.trim();
+      const xp = document.getElementById('suntik-xp').value.trim();
+      const resultDiv = document.getElementById('suntik-result');
+
+      if (!jid || !xp) {
+        resultDiv.innerText = '\u26A0\uFE0F JID dan XP wajib diisi!';
+        resultDiv.className = 'text-sm text-red-400 mt-2';
+        return;
+      }
+
+      resultDiv.innerText = '\u23F3 Memproses...';
+      resultDiv.className = 'text-sm text-yellow-400 mt-2';
+
+      try {
+        const res = await fetch('/api/rpg/suntik', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jid, xp: parseInt(xp) }),
+        });
+        const result = await res.json();
+
+        if (result.success) {
+          resultDiv.innerText = '\u2705 Berhasil menyuntikkan XP! Jabatan target sekarang: ' + result.data.pangkat;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
+          document.getElementById('suntik-jid').value = '';
+          document.getElementById('suntik-xp').value = '';
+        } else {
+          resultDiv.innerText = '\u274C Gagal: ' + result.error;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
+        }
+      } catch (err) {
+        resultDiv.innerText = '\u274C Gagal terhubung ke server.';
+        resultDiv.className = 'text-sm text-red-400 mt-2';
+      }
+    }
+
+    document.getElementById('btnCekUser').addEventListener('click', async () => {
+      const jid = document.getElementById('suntik-jid').value.trim();
+      const resultDiv = document.getElementById('userInfoResult');
+
+      if (!jid) return alert('Masukkan nomor WhatsApp dulu!');
+
+      resultDiv.innerHTML = '<span style="color: yellow;">Mencari data keanggotaan grup... \uD83D\uDD0D</span>';
+
+      try {
+        const response = await fetch('/api/rpg/cek-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jid })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          if (data.groups.length > 0) {
+            resultDiv.innerHTML = '<span style="color: #00ffcc;">\u2705 Ditemukan di ' + data.groups.length + ' Grup:</span><br>' +
+              '<ul style="color: white; margin-top: 5px;"><li>' + data.groups.join('</li><li>') + '</li></ul>';
+          } else {
+            resultDiv.innerHTML = '<span style="color: #ff3366;">\u26A0\uFE0F User tidak ditemukan di grup manapun yang memiliki bot ini.</span>';
+          }
+        } else {
+          resultDiv.innerHTML = '<span style="color: red;">Error: ' + data.error + '</span>';
+        }
+      } catch (err) {
+        resultDiv.innerHTML = '<span style="color: red;">Gagal terhubung ke server.</span>';
+      }
+    });
+
+    loadGroups();
+  </script>
+  <footer style="text-align: center; padding: 20px; margin-top: 50px; color: #666; font-size: 14px; border-top: 1px solid #333;">
+    <p>&copy; RyzarsAI | Version V.0.5.9</p>
+  </footer>
+</body>
+</html>
