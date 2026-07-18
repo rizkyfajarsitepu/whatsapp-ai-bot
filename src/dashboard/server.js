@@ -367,9 +367,11 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
   let { jid } = req.body;
   if (!jid) return res.status(400).json({ error: 'JID / Nomor wajib diisi' });
 
-  if (!jid.endsWith('@s.whatsapp.net')) {
-    jid = jid + '@s.whatsapp.net';
+  let targetNumber = jid.split('@')[0].replace(/[^0-9]/g, '');
+  if (targetNumber.startsWith('0')) {
+    targetNumber = '62' + targetNumber.substring(1);
   }
+  const cleanJid = targetNumber + '@s.whatsapp.net';
 
   try {
     const groups = await dashboardSock.groupFetchAllParticipating();
@@ -377,7 +379,13 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
 
     for (const groupId in groups) {
       const group = groups[groupId];
-      const isMember = group.participants.some(p => p.id === jid);
+
+      const isMember = group.participants.some(p => {
+        const participantId = typeof p === 'object' && p !== null ? p.id : p;
+        const participantNumber = String(participantId).split('@')[0].split(':')[0];
+        return participantNumber === targetNumber;
+      });
+
       if (isMember) {
         userGroups.push(group.subject || 'Grup Tanpa Nama');
       }
