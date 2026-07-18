@@ -19,6 +19,7 @@ import { startDashboard } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 import { verifyGroupStatus } from './core/groupManager.js';
+import { handleLeveling, getProfileStats } from './features/rpg.js';
 
 export const menfessSessions = new Map();
 
@@ -35,6 +36,7 @@ export const featureToggles = {
     persona: true,
     menfess: true,
     welcome_canvas: true,
+    rpg_leveling: true,
 };
 
 const featureMap = {
@@ -106,13 +108,13 @@ async function handleMessage(sock, msg) {
   const text = getTextContent(msg);
   const isImage = !!msg.message?.imageMessage;
   const isGroup = chatId.endsWith('@g.us');
+  const sender = msg.key.participant || chatId;
 
   if (isGroup) {
     const groupId = chatId;
     const groupMetadata = await sock.groupMetadata(groupId).catch(() => null);
     const groupName = groupMetadata ? groupMetadata.subject : 'Grup';
     const groupAdmins = groupMetadata ? groupMetadata.participants.filter(p => p.admin !== null).map(p => p.id) : [];
-    const sender = msg.key.participant || chatId;
     const isAdmin = groupAdmins.includes(sender);
 
     const isVerified = verifyGroupStatus(groupId, groupName);
@@ -126,6 +128,19 @@ async function handleMessage(sock, msg) {
 
       return;
     }
+  }
+
+  await handleLeveling(sock, msg, featureToggles);
+
+  const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+  if (textMessage.trim() === '!pangkat' || textMessage.trim() === '!profil') {
+    if (!featureToggles.rpg_leveling) {
+      await sock.sendMessage(chatId, { text: '🚨 Fitur Pejabat sedang cuti (OFF).' }, { quoted: msg });
+      return;
+    }
+    const statsMsg = getProfileStats(sender);
+    await sock.sendMessage(chatId, { text: statsMsg, mentions: [sender] }, { quoted: msg });
+    return;
   }
 
   if (isImage && !text.startsWith('!')) {

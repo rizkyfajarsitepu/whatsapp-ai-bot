@@ -1,0 +1,63 @@
+import fs from 'fs';
+import path from 'path';
+
+const dbPath = path.resolve(process.cwd(), 'rpg_db.json');
+
+let rpgDB = {};
+if (fs.existsSync(dbPath)) {
+    rpgDB = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+}
+
+const saveDB = () => fs.writeFileSync(dbPath, JSON.stringify(rpgDB, null, 2));
+
+export const getPangkat = (level) => {
+    if (level >= 100) return '👑 Presiden';
+    if (level >= 91) return '💼 Menteri';
+    if (level >= 71) return '🏛️ Gubernur';
+    if (level >= 51) return '🏙️ Bupati';
+    if (level >= 31) return '👔 Camat';
+    if (level >= 16) return '🏡 Kepala Desa';
+    if (level >= 6) return '🏘️ Ketua RT';
+    return '📑 Honorer';
+};
+
+export const handleLeveling = async (sock, msg, featureToggles) => {
+    if (featureToggles && featureToggles.rpg_leveling === false) return;
+    
+    const sender = msg.key.participant || msg.key.remoteJid;
+    if (!sender) return;
+
+    if (!rpgDB[sender]) {
+        rpgDB[sender] = { xp: 0, level: 0, lastChat: 0 };
+    }
+
+    const now = Date.now();
+    if (now - rpgDB[sender].lastChat > 60000) {
+        const addedXp = Math.floor(Math.random() * 11) + 5;
+        rpgDB[sender].xp += addedXp;
+        rpgDB[sender].lastChat = now;
+
+        const newLevel = Math.floor(Math.sqrt(rpgDB[sender].xp / 10));
+
+        if (newLevel > rpgDB[sender].level) {
+            rpgDB[sender].level = newLevel;
+            const pangkat = getPangkat(newLevel);
+            
+            const notifMsg = `🎊 *PELANTIKAN JABATAN BARU* 🎊\n\nSelamat @${sender.split('@')[0]}!\nKinerjamu di grup sangat baik, kamu telah naik ke Level ${newLevel}.\n\nJabatan barumu sekarang adalah: *${pangkat}* 🫡`;
+            
+            await sock.sendMessage(msg.key.remoteJid, { 
+                text: notifMsg, 
+                mentions: [sender] 
+            });
+        }
+        saveDB();
+    }
+};
+
+export const getProfileStats = (sender) => {
+    const user = rpgDB[sender] || { xp: 0, level: 0 };
+    const nextLevelXp = Math.pow(user.level + 1, 2) * 10;
+    const pangkat = getPangkat(user.level);
+    
+    return `📊 *KARTU TANDA PEJABAT (KTP)* 📊\n\n👤 Nama: @${sender.split('@')[0]}\n🎖️ Jabatan: *${pangkat}*\n📈 Level: ${user.level}\n✨ XP: ${user.xp} / ${nextLevelXp}\n\n_Rajin-rajinlah rapat (chat) di grup agar cepat naik jabatan!_`;
+};
