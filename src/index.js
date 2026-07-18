@@ -137,6 +137,13 @@ async function handleMessage(sock, msg) {
     return;
   }
 
+  if (textMessage.trim() === '!idgrup' && chatId.endsWith('@g.us')) {
+    await sock.sendMessage(chatId, {
+      text: `📍 *INFORMASI GRUP*\n\nID Grup ini adalah:\n*${chatId}*\n\n_Silakan salin ID di atas untuk keperluan pendaftaran atau aktivasi di Dashboard._`
+    });
+    return;
+  }
+
   if (isGroup) {
     const groupId = chatId;
     const groupMetadata = await sock.groupMetadata(groupId).catch(() => null);
