@@ -382,23 +382,27 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
 
     const userGroups = [];
 
-    for (const groupId in groups) {
-      const group = groups[groupId];
-      const participants = group.participants || [];
+    for (const groupId of groupIds) {
+      try {
+        const groupMeta = await dashboardSock.groupMetadata(groupId);
+        const participants = groupMeta.participants || [];
 
-      let found = false;
-      for (const p of participants) {
-        const participantId = typeof p === 'object' && p !== null ? p.id : p;
-        const participantNumber = String(participantId).split('@')[0].split(':')[0];
+        let found = false;
+        for (const p of participants) {
+          const participantId = typeof p === 'object' && p !== null ? p.id : p;
+          const participantNumber = String(participantId).split('@')[0].split(':')[0];
 
-        if (participantNumber === targetNumber) {
-          found = true;
-          break;
+          if (participantNumber === targetNumber) {
+            found = true;
+            break;
+          }
         }
-      }
 
-      if (found) {
-        userGroups.push(group.subject || 'Grup Tanpa Nama');
+        if (found) {
+          userGroups.push(groupMeta.subject || 'Grup Tanpa Nama');
+        }
+      } catch (err) {
+        console.log(`[⚠️ INTEL] Gagal mengambil metadata detail untuk grup ${groupId}`);
       }
     }
 
