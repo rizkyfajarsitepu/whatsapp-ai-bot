@@ -110,6 +110,33 @@ async function handleMessage(sock, msg) {
   const isGroup = chatId.endsWith('@g.us');
   const sender = msg.key.participant || chatId;
 
+  const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+
+  if (textMessage.trim().startsWith('!pangkat') || textMessage.trim().startsWith('!profil')) {
+    const isGroupChat = chatId.endsWith('@g.us');
+
+    if (!isGroupChat) {
+      await sock.sendMessage(chatId, { text: '🚨 KTP dan Jabatan Pemerintahan hanya berlaku di dalam Grup!' }, { quoted: msg });
+      return;
+    }
+
+    if (!featureToggles.rpg_leveling) {
+      await sock.sendMessage(chatId, { text: '🚨 Fitur Pejabat sedang cuti (OFF).' }, { quoted: msg });
+      return;
+    }
+
+    const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    const targetJid = mentionedJid.length > 0 ? mentionedJid[0] : sender;
+
+    const groupMetadata = await sock.groupMetadata(chatId).catch(() => null);
+    const groupAdmins = groupMetadata ? groupMetadata.participants.filter(p => p.admin !== null).map(p => p.id) : [];
+    const isAdmin = groupAdmins.includes(sender);
+
+    const statsMsg = getProfileStats(targetJid, isAdmin);
+    await sock.sendMessage(chatId, { text: statsMsg, mentions: [targetJid] }, { quoted: msg });
+    return;
+  }
+
   if (isGroup) {
     const groupId = chatId;
     const groupMetadata = await sock.groupMetadata(groupId).catch(() => null);
@@ -131,35 +158,6 @@ async function handleMessage(sock, msg) {
   }
 
   await handleLeveling(sock, msg, featureToggles);
-
-  const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-
-  if (textMessage.trim() === '!pangkat' || textMessage.trim() === '!profil') {
-    const isGroupChat = msg.key.remoteJid.endsWith('@g.us');
-
-    if (!isGroupChat) {
-      await sock.sendMessage(msg.key.remoteJid, { text: '🚨 KTP dan Jabatan Pemerintahan hanya berlaku di dalam Grup!' }, { quoted: msg });
-      return;
-    }
-
-    if (!featureToggles.rpg_leveling) {
-      await sock.sendMessage(msg.key.remoteJid, { text: '🚨 Fitur Pejabat sedang cuti (OFF).' }, { quoted: msg });
-      return;
-    }
-
-    const sender = msg.key.participant || msg.key.remoteJid;
-
-    const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-    const targetJid = mentionedJid.length > 0 ? mentionedJid[0] : sender;
-
-    const groupMetadata = await sock.groupMetadata(msg.key.remoteJid).catch(() => null);
-    const groupAdmins = groupMetadata ? groupMetadata.participants.filter(p => p.admin !== null).map(p => p.id) : [];
-    const isAdmin = groupAdmins.includes(sender);
-
-    const statsMsg = getProfileStats(targetJid, isAdmin);
-    await sock.sendMessage(msg.key.remoteJid, { text: statsMsg, mentions: [targetJid] }, { quoted: msg });
-    return;
-  }
 
   if (isImage && !text.startsWith('!')) {
     if (!featureToggles.ai_chat) return;
