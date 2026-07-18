@@ -54,10 +54,12 @@ app.post('/api/login', express.json(), (req, res) => {
 
   if (username === 'superadmin' && password === 'rahasia123') {
     req.session.isLoggedIn = true;
+    req.session.username = username;
     req.session.role = 'superadmin';
     return res.json({ success: true, message: 'Login berhasil sebagai Super Admin!', redirect: '/dashboard' });
   } else if (username === 'klien' && password === 'klien123') {
     req.session.isLoggedIn = true;
+    req.session.username = username;
     req.session.role = 'admin_grup';
     return res.json({ success: true, message: 'Login berhasil sebagai Admin Grup!', redirect: '/dashboard' });
   } else {
@@ -68,6 +70,13 @@ app.post('/api/login', express.json(), (req, res) => {
 app.get('/api/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
+});
+
+app.get('/api/me', requireLogin, (req, res) => {
+    res.json({
+        username: req.session.username,
+        role: req.session.role
+    });
 });
 
 app.get('/dashboard', requireLogin, (req, res) => {
@@ -127,10 +136,21 @@ app.get('/dashboard', requireLogin, (req, res) => {
       </div>
     </div>
 
+    <div id="super-admin-menu" style="display:none">
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-3">📢 Broadcast Panel</p>
       <textarea id="broadcastText" rows="4" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition duration-200" placeholder="Tulis pesan broadcast di sini..."></textarea>
       <button onclick="kirimBroadcast()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded w-full mt-3 transition duration-300 shadow-lg">📤 Kirim Broadcast</button>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-3">🎫 Buat Voucher</p>
+      <div class="space-y-3">
+        <input id="voucherDuration" type="number" placeholder="Durasi (hari)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <input id="voucherJumlah" type="number" placeholder="Jumlah voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <button onclick="buatVoucher()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎫 Buat Voucher</button>
+        <div id="voucher-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
     </div>
 
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 overflow-x-auto">
@@ -175,11 +195,35 @@ app.get('/dashboard', requireLogin, (req, res) => {
         <div id="userInfoResult" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
+    </div> 
+
+    <div id="admin-grup-menu" style="display:none">
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-blue-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 mb-3">🎟️ Redeem Voucher</p>
+      <div class="space-y-3">
+        <input id="kodeVoucher" type="text" placeholder="Masukkan kode voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="redeemVoucher()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎟️ Redeem</button>
+        <div id="redeem-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+    </div>
   </div>
 
   <script>
     const socket = io();
     const terminal = document.getElementById('terminal-box');
+
+    fetch('/api/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.role === 'superadmin') {
+          document.getElementById('super-admin-menu').style.display = 'block';
+          document.getElementById('admin-grup-menu').style.display = 'none';
+        } else {
+          document.getElementById('super-admin-menu').style.display = 'none';
+          document.getElementById('admin-grup-menu').style.display = 'block';
+        }
+      });
 
     socket.on('terminal_log', (msg) => {
       const div = document.createElement('div');
