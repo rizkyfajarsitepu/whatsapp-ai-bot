@@ -431,6 +431,7 @@
         btn.disabled = true;
         const newState = !isEnabled;
         onToggle(feature, newState, () => {
+          isEnabled = newState;
           btn.className = 'px-3 py-0.5 rounded text-xs font-bold transition duration-300 ' + (newState ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
           btn.innerText = newState ? 'ON' : 'OFF';
           btn.disabled = false;
