@@ -297,8 +297,13 @@ app.post('/api/rpg/suntik', express.json(), requireLogin, async (req, res) => {
   }
 
   try {
-    const updatedUser = suntikXP(jid, xp);
-    const oldLevel = getRpgDB()[updatedUser.jid] ? getRpgDB()[updatedUser.jid].level : 0;
+    const rawJid = jid.trim();
+    const cleanJid = rawJid.endsWith('@lid')
+      ? rawJid
+      : rawJid.split('@')[0].replace(/[^0-9]/g, '').replace(/^0/, '62') + '@s.whatsapp.net';
+
+    const oldLevel = getRpgDB()[cleanJid] ? getRpgDB()[cleanJid].level : 0;
+    const updatedUser = suntikXP(cleanJid, xp);
 
     if (dashboardSock && updatedUser.level !== oldLevel) {
       try {
