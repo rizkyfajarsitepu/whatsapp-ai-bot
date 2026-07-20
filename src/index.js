@@ -18,7 +18,7 @@ import { activePersonas, handleToggleMode, handlePersonaChat } from './features/
 import { startDashboard } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
-import { verifyGroupStatus } from './core/groupManager.js';
+import { verifyGroupStatus, getGroupFeatures } from './core/groupManager.js';
 import { handleLeveling, getProfileStats } from './features/rpg.js';
 import fs from 'fs';
 import path from 'path';
@@ -110,6 +110,15 @@ async function handleWelcome(sock, chatId, senderName) {
   return true;
 }
 
+const getEffectiveToggles = (chatId) => {
+  if (!chatId.endsWith('@g.us')) return featureToggles;
+  try {
+    return { ...featureToggles, ...getGroupFeatures(chatId) };
+  } catch {
+    return featureToggles;
+  }
+};
+
 async function handleMessage(sock, msg) {
   const chatId = msg.key.remoteJid;
   const senderName = msg.pushName || 'User';
@@ -117,6 +126,7 @@ async function handleMessage(sock, msg) {
   const isImage = !!msg.message?.imageMessage;
   const isGroup = chatId.endsWith('@g.us');
   const sender = msg.key.participant || chatId;
+  const toggles = getEffectiveToggles(chatId);
 
   const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
 
@@ -128,10 +138,7 @@ async function handleMessage(sock, msg) {
       return;
     }
 
-    if (!featureToggles.rpg_leveling) {
-      await sock.sendMessage(chatId, { text: '🚨 Fitur Pejabat sedang cuti (OFF).' }, { quoted: msg });
-      return;
-    }
+    if (!toggles.rpg_leveling) return;
 
     const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     const targetJid = mentionedJid.length > 0 ? mentionedJid[0] : sender;
@@ -189,10 +196,10 @@ async function handleMessage(sock, msg) {
     }
   }
 
-  await handleLeveling(sock, msg, featureToggles);
+  await handleLeveling(sock, msg, toggles);
 
   if (isImage && !text.startsWith('!')) {
-    if (!featureToggles.ai_chat) return;
+    if (!toggles.ai_chat) return;
     await handleProactiveVision(sock, msg, text);
     return;
   }
@@ -208,7 +215,7 @@ async function handleMessage(sock, msg) {
   logger.info({ sender: senderName, jid: chatId, text }, 'Pesan diterima');
 
   if (cmd === 'menfess') {
-    if (!featureToggles.menfess) return sock.sendMessage(chatId, { text: '🚨 Fitur Menfess sedang dimatikan/maintenance.' });
+    if (!toggles.menfess) return;
 
     if (!args || !args.includes('|')) {
       return sock.sendMessage(chatId, { text: '⚠️ Format salah!\n\n*Cara pakai:*\n!menfess <nomor_tujuan> | <pesan>\n\n*Contoh:*\n!menfess 628123456789 | halo, aku suka kamu' });
@@ -237,7 +244,7 @@ async function handleMessage(sock, msg) {
   }
 
   if (cmd === 'balasmenfess') {
-    if (!featureToggles.menfess) return sock.sendMessage(chatId, { text: '🚨 Fitur Menfess sedang dimatikan.' });
+    if (!toggles.menfess) return;
 
     if (!args || !args.trim()) return sock.sendMessage(chatId, { text: '⚠️ Pesan balasan tidak boleh kosong!\n*Contoh:* !balasmenfess oh ya? siapa nih?' });
 
@@ -262,9 +269,7 @@ async function handleMessage(sock, msg) {
   const isCommand = cmd && commands[cmd];
   if (isCommand) {
     const featureKey = featureMap[cmd];
-    if (featureKey && !featureToggles[featureKey]) {
-      return sock.sendMessage(chatId, { text: `🚨 Mohon maaf, fitur *${cmd}* sedang maintenance.` });
-    }
+    if (featureKey && !toggles[featureKey]) return;
 
     const allowed = await checkRateLimit(chatId);
     if (!allowed) {
@@ -275,7 +280,7 @@ async function handleMessage(sock, msg) {
 
     try {
       if (cmd === 'menu' || cmd === 'help') {
-        await handleMenu(sock, msg, featureToggles);
+        await handleMenu(sock, msg, toggles);
       } else {
         await commands[cmd](sock, msg, args);
       }
@@ -289,9 +294,7 @@ async function handleMessage(sock, msg) {
     return;
   }
 
-  if (!featureToggles.ai_chat) {
-    return sock.sendMessage(chatId, { text: '🚨 Mohon maaf, fitur AI Chat sedang maintenance.' });
-  }
+  if (!toggles.ai_chat) return;
 
   const allowed = await checkRateLimit(chatId);
   if (!allowed) {

@@ -85,7 +85,8 @@
     </div>
 
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
-      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">👥 Manajemen Grup</p>
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">👥 Manajemen Grup & Fitur</p>
+      <p class="text-gray-400 text-xs mb-3">Klik tombol <strong>⚙️ Fitur</strong> untuk mengatur fitur spesifik per grup. Fitur yang OFF akan membuat bot diam (tidak merespons) saat command-nya dipanggil.</p>
       <div id="group-container">
         <p class="text-gray-500 text-sm">Memuat daftar grup...</p>
       </div>
@@ -126,6 +127,14 @@
         <input id="kodeVoucher" type="text" placeholder="Masukkan kode voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition duration-200 font-mono text-sm">
         <button onclick="redeemVoucher()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎟️ Redeem</button>
         <div id="redeem-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">⚙️ Pengaturan Fitur Grup</p>
+      <p class="text-gray-400 text-xs mb-3">Atur fitur yang aktif untuk grup Anda. Fitur yang OFF akan membuat bot diam tanpa respons.</p>
+      <div id="group-features-container">
+        <p class="text-gray-500 text-sm">Memuat pengaturan...</p>
       </div>
     </div>
 
@@ -390,6 +399,61 @@
       }
     });
 
+    const FEATURE_LABELS = {
+      ai_chat: 'AI Chat',
+      stiker: 'Stiker',
+      tts: 'TTS (Text-to-Speech)',
+      stt: 'STT (Speech-to-Text)',
+      downloader: 'Downloader',
+      image_tools: 'Image Tools',
+      info_tools: 'Info Tools',
+      utility_tools: 'Utility Tools',
+      ringkas: 'Ringkas YouTube',
+      persona: 'Persona Mode',
+      menfess: 'Menfess',
+      welcome_canvas: 'Welcome Canvas',
+      rpg_leveling: 'RPG Leveling',
+    };
+
+    function createFeatureToggle(feature, isEnabled, onToggle) {
+      const div = document.createElement('div');
+      div.className = 'flex justify-between items-center py-2';
+
+      const label = document.createElement('span');
+      label.className = 'text-gray-300 text-sm';
+      label.innerText = FEATURE_LABELS[feature] || feature.replace(/_/g, ' ');
+
+      const btn = document.createElement('button');
+      btn.className = 'px-3 py-0.5 rounded text-xs font-bold transition duration-300 ' + (isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
+      btn.innerText = isEnabled ? 'ON' : 'OFF';
+
+      btn.onclick = () => {
+        btn.disabled = true;
+        const newState = !isEnabled;
+        onToggle(feature, newState, () => {
+          btn.className = 'px-3 py-0.5 rounded text-xs font-bold transition duration-300 ' + (newState ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
+          btn.innerText = newState ? 'ON' : 'OFF';
+          btn.disabled = false;
+        });
+      };
+
+      div.appendChild(label);
+      div.appendChild(btn);
+      return div;
+    }
+
+    function createFeaturesPanel(containerId, features, onSave) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      for (const [feature, isEnabled] of Object.entries(features)) {
+        const toggle = createFeatureToggle(feature, isEnabled, (feat, newState, done) => {
+          features[feat] = newState;
+          onSave(features, () => done());
+        });
+        container.appendChild(toggle);
+      }
+    }
+
     async function loadGroups() {
       const container = document.getElementById('group-container');
       try {
@@ -403,29 +467,36 @@
         }
 
         container.innerHTML = '';
-        entries.forEach(([groupId, data]) => {
+        for (const [groupId, data] of entries) {
           const safeId = groupId.replace(/[^a-zA-Z0-9]/g, '_');
-          const div = document.createElement('div');
-          div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
-          div.id = 'row-' + safeId;
+          const features = data.features || {};
+          let featuresExpanded = false;
+
+          const card = document.createElement('div');
+          card.className = 'bg-gray-800 p-3 rounded mb-3';
+          card.id = 'row-' + safeId;
+
+          const header = document.createElement('div');
+          header.className = 'flex justify-between items-center';
 
           const label = document.createElement('span');
           label.className = 'text-white font-semibold text-sm flex-1 truncate mr-2';
           label.innerText = data.name || groupId.split('@')[0];
 
           const badge = document.createElement('span');
-          badge.className = 'text-xs text-gray-400 mr-3';
+          badge.className = 'text-xs mr-2';
+          badge.className += data.verified ? ' text-green-400' : ' text-gray-400';
           badge.innerText = data.verified ? 'TERVERIFIKASI' : 'BELUM';
           badge.id = 'status-' + safeId;
 
-          const btn = document.createElement('button');
-          btn.className = 'px-4 py-1 rounded font-bold transition duration-300 shrink-0 ' + (data.verified ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
-          btn.innerText = data.verified ? 'ON' : 'OFF';
-          btn.id = 'btn-kill-' + safeId;
+          const btnToggle = document.createElement('button');
+          btnToggle.className = 'px-3 py-1 rounded text-xs font-bold transition duration-300 shrink-0 ' + (data.verified ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
+          btnToggle.innerText = data.verified ? 'ON' : 'OFF';
+          btnToggle.id = 'btn-kill-' + safeId;
 
-          btn.onclick = async () => {
-            btn.disabled = true;
-            btn.innerText = '...';
+          btnToggle.onclick = async () => {
+            btnToggle.disabled = true;
+            btnToggle.innerText = '...';
             try {
               const res = await fetch('/api/groups/toggle', {
                 method: 'POST',
@@ -437,18 +508,89 @@
                 loadGroups();
               }
             } catch (err) {
-              alert('Gagal toggle grup');
               loadGroups();
             }
           };
 
-          div.appendChild(label);
-          div.appendChild(badge);
-          div.appendChild(btn);
-          container.appendChild(div);
-        });
+          const btnFeatures = document.createElement('button');
+          btnFeatures.className = 'px-3 py-1 rounded text-xs font-bold transition duration-300 shrink-0 ml-2 bg-yellow-600 hover:bg-yellow-700 text-white';
+          btnFeatures.innerText = '⚙️ Fitur';
+
+          const featuresPanel = document.createElement('div');
+          featuresPanel.className = 'mt-3 pt-3 border-t border-gray-700 hidden';
+          featuresPanel.id = 'features-' + safeId;
+
+          btnFeatures.onclick = () => {
+            featuresExpanded = !featuresExpanded;
+            featuresPanel.classList.toggle('hidden');
+            btnFeatures.classList.toggle('bg-yellow-600');
+            btnFeatures.classList.toggle('bg-gray-600');
+            if (featuresExpanded && featuresPanel.children.length === 0) {
+              createFeaturesPanel('features-' + safeId, { ...features }, async (updatedFeatures, done) => {
+                try {
+                  const res = await fetch('/api/groups/features', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ groupId, features: updatedFeatures }),
+                  });
+                  const result = await res.json();
+                  if (result.success) {
+                    Object.assign(features, result.features);
+                  }
+                } catch (err) {}
+                done();
+              });
+            }
+          };
+
+          header.appendChild(label);
+          header.appendChild(badge);
+          header.appendChild(btnToggle);
+          header.appendChild(btnFeatures);
+          card.appendChild(header);
+          card.appendChild(featuresPanel);
+          container.appendChild(card);
+        }
       } catch (err) {
         container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat daftar grup.</p>';
+      }
+    }
+
+    async function loadGroupFeatures() {
+      const container = document.getElementById('group-features-container');
+      try {
+        const meRes = await fetch('/api/me');
+        const me = await meRes.json();
+        if (!me.groupId) {
+          container.innerHTML = '<p class="text-gray-500 text-sm">ID grup tidak ditemukan pada akun Anda.</p>';
+          return;
+        }
+
+        const res = await fetch('/api/groups/features/' + encodeURIComponent(me.groupId));
+        const data = await res.json();
+        if (!data.success) {
+          container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat pengaturan fitur.</p>';
+          return;
+        }
+
+        container.innerHTML = '';
+        const features = data.features;
+        for (const [feature, isEnabled] of Object.entries(features)) {
+          const toggle = createFeatureToggle(feature, isEnabled, (feat, newState, done) => {
+            features[feat] = newState;
+            fetch('/api/groups/features', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ groupId: me.groupId, features }),
+            }).then(r => r.json()).then(result => {
+              if (result.success) Object.assign(features, result.features);
+              done();
+            }).catch(() => done());
+          });
+          container.appendChild(toggle);
+        }
+      } catch (err) {
+        container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat pengaturan fitur.</p>';
       }
     }
 
@@ -520,7 +662,15 @@
       }
     });
 
-    loadGroups();
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(me => {
+        if (me.role === 'superadmin') {
+          loadGroups();
+        } else {
+          loadGroupFeatures();
+        }
+      });
   </script>
   <footer class="footer">
     <p>&copy; RyzarsAI | Version V.0.5.9</p>

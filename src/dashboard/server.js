@@ -7,7 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
-import { getGroupsDB, toggleGroupVerification } from '../core/groupManager.js';
+import { getGroupsDB, toggleGroupVerification, getGroupFeatures, setGroupFeatures, DEFAULT_FEATURES } from '../core/groupManager.js';
 import { getRpgDB, suntikXP } from '../features/rpg.js';
 
 const app = express();
@@ -274,6 +274,21 @@ app.get('/api/stats', (req, res) => {
 
 app.get('/api/groups', (req, res) => {
   res.json(getGroupsDB());
+});
+
+app.get('/api/groups/features/:groupId', requireLogin, (req, res) => {
+  const { groupId } = req.params;
+  const features = getGroupFeatures(groupId);
+  res.json({ success: true, features });
+});
+
+app.post('/api/groups/features', express.json(), requireLogin, (req, res) => {
+  const { groupId, features } = req.body;
+  if (!groupId || !features) {
+    return res.status(400).json({ success: false, error: 'groupId dan features wajib diisi' });
+  }
+  const saved = setGroupFeatures(groupId, features);
+  res.json({ success: true, message: 'Pengaturan fitur grup tersimpan', features: saved });
 });
 
 app.post('/api/groups/toggle', express.json(), (req, res) => {
