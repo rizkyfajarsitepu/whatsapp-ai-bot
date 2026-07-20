@@ -46,7 +46,8 @@ async function downloadWithYtdlp(url, outputPath) {
     '--no-warnings',
     '--no-playlist',
     '--concurrent-fragments', '4',
-    '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+    '--remux-video', 'mp4',
+    '-f', 'best[ext=mp4]',
     '-o', outputPath,
     url,
   ];
@@ -97,7 +98,7 @@ export async function handleDownloader(sock, msg, args) {
   await sock.sendMessage(chatId, { react: { text: '⏳', key: msg.key } });
 
   const timestamp = Date.now();
-  const outputTemplate = path.join(TEMP_DIR, `${timestamp}.%(ext)s`);
+  const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
 
   try {
     let info;
@@ -122,53 +123,46 @@ export async function handleDownloader(sock, msg, args) {
       text: `Mengunduh: *${title}*\nCreator: ${uploader}\nHarap tunggu...`,
     });
 
-    await downloadWithYtdlp(url, outputTemplate);
+    await downloadWithYtdlp(url, outputPath);
 
-    const files = fs.readdirSync(TEMP_DIR).filter((f) => f.startsWith(`${timestamp}.`));
-
-    if (files.length === 0) {
+    if (!fs.existsSync(outputPath)) {
       throw new Error('File tidak ditemukan setelah download');
     }
 
-    const downloadedFile = path.join(TEMP_DIR, files[0]);
-    const fileStat = fs.statSync(downloadedFile);
+    const fileStat = fs.statSync(outputPath);
     const fileSizeMB = fileStat.size / (1024 * 1024);
 
     if (fileSizeMB > 100) {
-      cleanupFile(downloadedFile);
+      cleanupFile(outputPath);
       await sock.sendMessage(chatId, {
         text: `Ukuran file terlalu besar (${fileSizeMB.toFixed(1)} MB). Batas maksimal 100 MB.`,
       });
       return;
     }
 
-    const ext = path.extname(files[0]).toLowerCase();
-    const isVideo = ['.mp4', '.mkv', '.webm', '.avi'].includes(ext);
-    const isAudio = ['.mp3', '.m4a', '.ogg', '.opus', '.wav'].includes(ext);
-    const isImage = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext);
+    const fileBuffer = fs.readFileSync(outputPath);
+    const isAudio = info?.ext === 'mp3' || info?.acodec === 'none' || (info?.vcodec === 'none' && info?.acodec);
 
-    let mimetype = 'application/octet-stream';
-    if (isVideo) mimetype = 'video/mp4';
-    else if (isAudio) mimetype = 'audio/mpeg';
-    else if (isImage) mimetype = 'image/jpeg';
+    if (isAudio) {
+      await sock.sendMessage(chatId, {
+        audio: fileBuffer,
+        mimetype: 'audio/mpeg',
+      });
+    } else {
+      await sock.sendMessage(chatId, {
+        video: fileBuffer,
+        mimetype: 'video/mp4',
+        caption: `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
+      });
+    }
 
-    const fileBuffer = fs.readFileSync(downloadedFile);
-
-    await sock.sendMessage(chatId, {
-      document: fileBuffer,
-      fileName: files[0],
-      mimetype,
-      caption: `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
-    });
-
-    console.log(`📤 [Downloader] File terkirim ke ${chatId}: ${files[0]}`);
+    console.log(`[Downloader] File terkirim ke ${chatId}: ${path.basename(outputPath)}`);
   } catch (err) {
     console.error('[Downloader] Error:', err);
     await sock.sendMessage(chatId, {
       text: `Gagal mengunduh media. Error: ${err.message}`,
     });
   } finally {
-    const remaining = fs.readdirSync(TEMP_DIR).filter((f) => f.startsWith(`${timestamp}.`));
-    remaining.forEach((f) => cleanupFile(path.join(TEMP_DIR, f)));
+    cleanupFile(outputPath);
   }
 }
