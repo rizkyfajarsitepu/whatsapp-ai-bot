@@ -296,33 +296,32 @@ app.post('/api/rpg/suntik', express.json(), requireLogin, async (req, res) => {
     return res.status(400).json({ error: 'JID dan Jumlah XP wajib diisi (bisa angka negatif)' });
   }
 
-  let targetNumber = jid.split('@')[0].replace(/[^0-9]/g, '');
-  if (targetNumber.startsWith('0')) targetNumber = '62' + targetNumber.substring(1);
-  const cleanJid = jid.endsWith('@lid') ? jid : targetNumber + '@s.whatsapp.net';
-
-  const oldLevel = getRpgDB()[cleanJid] ? getRpgDB()[cleanJid].level : 0;
-
   try {
-    const updatedUser = suntikXP(cleanJid, xp);
+    const updatedUser = suntikXP(jid, xp);
+    const oldLevel = getRpgDB()[updatedUser.jid] ? getRpgDB()[updatedUser.jid].level : 0;
 
-    if (updatedUser.level !== oldLevel) {
-      const groups = await dashboardSock.groupFetchAllParticipating();
-      for (const groupId in groups) {
-        const group = groups[groupId];
-        const isMember = group.participants.some(p => {
-          const pid = typeof p === 'object' && p !== null ? p.id : p;
-          return String(pid).split('@')[0].split(':')[0] === targetNumber || pid === cleanJid;
-        });
+    if (dashboardSock && updatedUser.level !== oldLevel) {
+      try {
+        const groups = await dashboardSock.groupFetchAllParticipating().catch(() => ({}));
+        for (const groupId in groups) {
+          const group = groups[groupId];
+          const isMember = group.participants.some(p => {
+            const pid = typeof p === 'object' && p !== null ? p.id : p;
+            return String(pid) === updatedUser.jid;
+          });
 
-        if (isMember) {
-          const isPromotion = updatedUser.level > oldLevel;
-          const alertMsg = isPromotion
-            ? `🎉 *PROMOSI JABATAN* 🎉\n\nSelamat kepada @${cleanJid.split('@')[0]}!\nJabatan anda kini naik menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Tetap mengabdi untuk rakyat ya!_`
-            : `⚠️ *SANKSI DISIPLIN* ⚠️\n\nPerhatian! @${cleanJid.split('@')[0]} telah dijatuhi sanksi.\nJabatan anda kini turun menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Segera perbaiki kinerja anda di grup!_`;
+          if (isMember) {
+            const isPromotion = updatedUser.level > oldLevel;
+            const alertMsg = isPromotion
+              ? `🎉 *PROMOSI JABATAN* 🎉\n\nSelamat kepada @${updatedUser.jid.split('@')[0]}!\nJabatan anda kini naik menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Tetap mengabdi untuk rakyat ya!_`
+              : `⚠️ *SANKSI DISIPLIN* ⚠️\n\nPerhatian! @${updatedUser.jid.split('@')[0]} telah dijatuhi sanksi.\nJabatan anda kini turun menjadi: *${updatedUser.pangkat}* (Level ${updatedUser.level}).\n\n_Segera perbaiki kinerja anda di grup!_`;
 
-          await dashboardSock.sendMessage(groupId, { text: alertMsg, mentions: [cleanJid] });
-          break;
+            await dashboardSock.sendMessage(groupId, { text: alertMsg, mentions: [updatedUser.jid] });
+            break;
+          }
         }
+      } catch (notifErr) {
+        logger.warn({ err: notifErr }, 'Gagal kirim notifikasi promosi/sanksi, XP tetap tersimpan');
       }
     }
 
@@ -332,9 +331,13 @@ app.post('/api/rpg/suntik', express.json(), requireLogin, async (req, res) => {
   }
 });
 
-app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
+app.post('/api/rpg/cek-user', express.json(), requireLogin, async (req, res) => {
   let { jid } = req.body;
   if (!jid) return res.status(400).json({ error: 'JID / Nomor wajib diisi' });
+
+  if (!dashboardSock) {
+    return res.status(503).json({ error: 'Bot WhatsApp sedang tidak terhubung' });
+  }
 
   let cleanJid = jid.trim();
   let isLid = cleanJid.endsWith('@lid');
@@ -349,7 +352,7 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
   }
 
   try {
-    const groups = await dashboardSock.groupFetchAllParticipating();
+    const groups = await dashboardSock.groupFetchAllParticipating().catch(() => ({}));
     const groupIds = Object.keys(groups);
     const userGroups = [];
 
@@ -375,11 +378,12 @@ app.post('/api/rpg/cek-user', express.json(), async (req, res) => {
           userGroups.push(groupMeta.subject || 'Grup Tanpa Nama');
         }
       } catch (err) {
-        // Abaikan error metadata
+        // Abaikan error metadata satu grup
       }
     }
     res.json({ success: true, groups: userGroups });
   } catch (error) {
+    logger.error({ err: error }, 'Gagal cek user RPG');
     res.status(500).json({ error: 'Gagal mengecek data grup user' });
   }
 });
