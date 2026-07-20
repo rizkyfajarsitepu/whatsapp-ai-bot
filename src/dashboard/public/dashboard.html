@@ -6,6 +6,7 @@
   <title>Control Panel Bot</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
+  <link rel="stylesheet" href="/dashboard.css">
 </head>
 <body class="bg-gray-900 text-white min-h-screen p-4">
   <div class="w-full max-w-4xl mx-auto space-y-6">
@@ -31,7 +32,7 @@
       </div>
     </div>
 
-    <div id="super-admin-menu" style="display:none">
+    <div id="super-admin-menu" class="hidden">
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-3">📢 Broadcast Panel</p>
       <textarea id="broadcastText" rows="4" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition duration-200" placeholder="Tulis pesan broadcast di sini..."></textarea>
@@ -110,7 +111,7 @@
     </div>
     </div>
 
-    <div id="admin-grup-menu" style="display:none">
+    <div id="admin-grup-menu" class="hidden">
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400 mb-3">📊 Status Layanan Bot</p>
       <div class="space-y-2">
@@ -154,11 +155,11 @@
             const badge = document.getElementById('status-badge');
             const dateEl = document.getElementById('status-date');
             if (data.isActive) {
-              badge.innerHTML = '<span style="color:#4CAF50;">\uD83D\uDFE2 AKTIF</span>';
+              badge.innerHTML = '<span class="text-green-500">\uD83D\uDFE2 AKTIF</span>';
               dateEl.textContent = data.expiredDate;
               dateEl.style.color = '#4CAF50';
             } else {
-              badge.innerHTML = '<span style="color:#F44336;">\uD83D\uDD34 OFF (Belum Terverifikasi / Kedaluwarsa)</span>';
+              badge.innerHTML = '<span class="text-red-500">\uD83D\uDD34 OFF (Belum Terverifikasi / Kedaluwarsa)</span>';
               dateEl.textContent = 'Silakan redeem voucher.';
               dateEl.style.color = '#F44336';
             }
@@ -170,11 +171,11 @@
       .then(res => res.json())
       .then(data => {
         if (data.role === 'superadmin') {
-          document.getElementById('super-admin-menu').style.display = 'block';
-          document.getElementById('admin-grup-menu').style.display = 'none';
+          document.getElementById('super-admin-menu').classList.remove('hidden');
+          document.getElementById('admin-grup-menu').classList.add('hidden');
         } else {
-          document.getElementById('super-admin-menu').style.display = 'none';
-          document.getElementById('admin-grup-menu').style.display = 'block';
+          document.getElementById('super-admin-menu').classList.add('hidden');
+          document.getElementById('admin-grup-menu').classList.remove('hidden');
           loadGroupStatus();
         }
       });
@@ -201,7 +202,7 @@
 
         const resultDiv = document.getElementById('voucher-result');
         if (data.success) {
-          resultDiv.innerHTML = '\u2705 ' + data.message + '<br><code style="color:#c084fc;font-size:13px;">' + data.codes.join('<br>') + '</code>';
+          resultDiv.innerHTML = '\u2705 ' + data.message + '<br><code class="text-purple-400-sm">' + data.codes.join('<br>') + '</code>';
           resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('input-jumlah').value = 1;
         } else {
@@ -280,7 +281,7 @@
         const data = await res.json();
         const resultDiv = document.getElementById('cek-password-result');
         if (data.success) {
-          resultDiv.innerHTML = '\u2705 Password untuk <code style="color:#fbbf24;">' + id + '</code>: <strong style="color:#4CAF50;">' + data.password + '</strong>';
+          resultDiv.innerHTML = '\u2705 Password untuk <code class="text-amber-400">' + id + '</code>: <strong class="text-green-500">' + data.password + '</strong>';
           resultDiv.className = 'text-sm text-green-400 mt-2';
         } else {
           resultDiv.textContent = '\u274C ' + data.message;
@@ -316,7 +317,7 @@
           const rowEl = document.getElementById('row-' + safeId);
 
           if (statusBadge) {
-            statusBadge.innerHTML = '<span style="color:#F44336;font-weight:bold;">OFF</span>';
+            statusBadge.innerHTML = '<span class="text-red-500-bold">OFF</span>';
           }
           if (btnKill) {
             btnKill.innerText = 'OFF';
@@ -324,7 +325,7 @@
             btnKill.disabled = true;
           }
           if (rowEl) {
-            rowEl.style.borderLeft = '3px solid #F44336';
+            rowEl.classList.add('border-left-red');
           }
         } else {
           resultDiv.textContent = '\u274C ' + data.message;
@@ -494,7 +495,7 @@
 
       if (!jid) return alert('Masukkan nomor WhatsApp dulu!');
 
-      resultDiv.innerHTML = '<span style="color: yellow;">Mencari data keanggotaan grup... \uD83D\uDD0D</span>';
+      resultDiv.innerHTML = '<span class="text-warning">Mencari data keanggotaan grup... \uD83D\uDD0D</span>';
 
       try {
         const response = await fetch('/api/rpg/cek-user', {
@@ -506,22 +507,22 @@
 
         if (data.success) {
           if (data.groups.length > 0) {
-            resultDiv.innerHTML = '<span style="color: #00ffcc;">\u2705 Ditemukan di ' + data.groups.length + ' Grup:</span><br>' +
-              '<ul style="color: white; margin-top: 5px;"><li>' + data.groups.join('</li><li>') + '</li></ul>';
+            resultDiv.innerHTML = '<span class="text-cyan-400">\u2705 Ditemukan di ' + data.groups.length + ' Grup:</span><br>' +
+              '<ul class="text-white-list"><li>' + data.groups.join('</li><li>') + '</li></ul>';
           } else {
-            resultDiv.innerHTML = '<span style="color: #ff3366;">\u26A0\uFE0F User tidak ditemukan di grup manapun yang memiliki bot ini.</span>';
+            resultDiv.innerHTML = '<span class="text-pink-500">\u26A0\uFE0F User tidak ditemukan di grup manapun yang memiliki bot ini.</span>';
           }
         } else {
-          resultDiv.innerHTML = '<span style="color: red;">Error: ' + data.error + '</span>';
+          resultDiv.innerHTML = '<span class="text-error">Error: ' + data.error + '</span>';
         }
       } catch (err) {
-        resultDiv.innerHTML = '<span style="color: red;">Gagal terhubung ke server.</span>';
+        resultDiv.innerHTML = '<span class="text-error">Gagal terhubung ke server.</span>';
       }
     });
 
     loadGroups();
   </script>
-  <footer style="text-align: center; padding: 20px; margin-top: 50px; color: #666; font-size: 14px; border-top: 1px solid #333;">
+  <footer class="footer">
     <p>&copy; RyzarsAI | Version V.0.5.9</p>
   </footer>
 </body>

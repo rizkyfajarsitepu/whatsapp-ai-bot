@@ -6,7 +6,7 @@ import os from 'os';
 
 const execFileAsync = promisify(execFile);
 
-const YTDLP_PATH = 'C:\\Users\\USER\\AppData\\Local\\Microsoft\\WinGet\\Links\\yt-dlp.exe';
+const YTDLP_PATH = 'yt-dlp';
 const TEMP_DIR = path.join(os.tmpdir(), 'bot-downloads');
 
 if (!fs.existsSync(TEMP_DIR)) {
