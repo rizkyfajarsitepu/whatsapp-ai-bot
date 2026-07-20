@@ -515,18 +515,21 @@
           const btnFeatures = document.createElement('button');
           btnFeatures.className = 'px-3 py-1 rounded text-xs font-bold transition duration-300 shrink-0 ml-2 bg-yellow-600 hover:bg-yellow-700 text-white';
           btnFeatures.innerText = '⚙️ Fitur';
+          btnFeatures.type = 'button';
 
           const featuresPanel = document.createElement('div');
-          featuresPanel.className = 'mt-3 pt-3 border-t border-gray-700 hidden';
+          featuresPanel.className = 'mt-3 pt-3 border-t border-gray-700';
+          featuresPanel.style.display = 'none';
           featuresPanel.id = 'features-' + safeId;
 
           btnFeatures.onclick = () => {
             featuresExpanded = !featuresExpanded;
-            featuresPanel.classList.toggle('hidden');
+            featuresPanel.style.display = featuresExpanded ? 'block' : 'none';
             btnFeatures.classList.toggle('bg-yellow-600');
             btnFeatures.classList.toggle('bg-gray-600');
             if (featuresExpanded && featuresPanel.children.length === 0) {
-              createFeaturesPanel('features-' + safeId, { ...features }, async (updatedFeatures, done) => {
+              const panelFeatures = { ...features };
+              createFeaturesPanel('features-' + safeId, panelFeatures, async (updatedFeatures, done) => {
                 try {
                   const res = await fetch('/api/groups/features', {
                     method: 'POST',

@@ -273,7 +273,15 @@ app.get('/api/stats', (req, res) => {
 });
 
 app.get('/api/groups', (req, res) => {
-  res.json(getGroupsDB());
+  const raw = getGroupsDB();
+  const normalized = {};
+  for (const [groupId, data] of Object.entries(raw)) {
+    normalized[groupId] = data;
+    if (!normalized[groupId].features) {
+      normalized[groupId].features = { ...DEFAULT_FEATURES };
+    }
+  }
+  res.json(normalized);
 });
 
 app.get('/api/groups/features/:groupId', requireLogin, (req, res) => {
