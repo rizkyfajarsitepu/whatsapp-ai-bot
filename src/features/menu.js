@@ -1,7 +1,7 @@
 import { config } from '../config/settings.js';
 import logger from '../utils/logger.js';
 
-export function getMenuText(featureToggles = {}) {
+export function getMenuText(featureToggles = {}, isGroup = false) {
   const t = featureToggles;
   const any = (...keys) => keys.some(k => t[k] !== false);
 
@@ -41,6 +41,7 @@ export function getMenuText(featureToggles = {}) {
     if (t.utility_tools !== false) text += `📱 !qr <teks> — Generate QR Code\n`;
     if (t.utility_tools !== false) text += `🔗 !short <url> — URL Shortener\n`;
     if (t.utility_tools !== false) text += `🧮 !hitung <rumus> — Kalkulator\n`;
+    if (isGroup) text += `📍 !idgrup — Lihat ID Grup\n`;
     text += '\n';
   }
 
@@ -58,6 +59,14 @@ export function getMenuText(featureToggles = {}) {
     text += `───────────────\n`;
     text += `*SOSIAL*\n`;
     if (t.menfess !== false) text += `💌 !menfess <nomor> | <pesan> — Kirim Pesan Rahasia\n`;
+    if (t.menfess !== false) text += `💬 !balasmenfess <pesan> — Balas Pesan Rahasia\n`;
+    text += '\n';
+  }
+
+  if (isGroup && t.rpg_leveling !== false) {
+    text += `───────────────\n`;
+    text += `*🏛️ RPG / LEVELING*\n`;
+    text += `📊 !pangkat / !profil — Cek Jabatan & Profil\n`;
     text += '\n';
   }
 
@@ -72,7 +81,8 @@ export function getMenuText(featureToggles = {}) {
 
 export async function handleMenu(sock, msg, featureToggles) {
   const chatId = msg.key.remoteJid;
-  const menuText = getMenuText(featureToggles);
+  const isGroup = chatId.endsWith('@g.us');
+  const menuText = getMenuText(featureToggles, isGroup);
 
   await sock.sendMessage(chatId, { text: menuText });
 
