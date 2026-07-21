@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import axios from 'axios';
 
 const execFileAsync = promisify(execFile);
 
@@ -37,6 +38,22 @@ function isFacebookUrl(url) {
   return /facebook\.com|fb\.watch/i.test(url);
 }
 
+async function resolveTikTokUrl(url) {
+  try {
+    const { data } = await axios.get('https://www.tiktok.com/oembed', {
+      params: { url, format: 'json' },
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      },
+    });
+    if (data && data.author_url) {
+      return data.author_url;
+    }
+  } catch {}
+  return url;
+}
+
 function isSupportedUrl(url) {
   return isYouTubeUrl(url) || isTikTokUrl(url) || isInstagramUrl(url) || isFacebookUrl(url);
 }
@@ -55,8 +72,8 @@ async function downloadWithYtdlp(url, outputPath) {
 
   if (isTikTok) {
     args.push(
-      '--extractor-args', 'tiktok:api_hostname=api16-normal-useast5.us.tiktokv.com',
-      '--referer', 'https://www.tiktok.com/',
+      '--extractor-args', 'tiktok:platform=app',
+      '--force-ipv4',
     );
   }
 
@@ -82,8 +99,8 @@ async function getInfoWithYtdlp(url) {
 
   if (isTikTok) {
     args.push(
-      '--extractor-args', 'tiktok:api_hostname=api16-normal-useast5.us.tiktokv.com',
-      '--referer', 'https://www.tiktok.com/',
+      '--extractor-args', 'tiktok:platform=app',
+      '--force-ipv4',
     );
   }
 
@@ -121,10 +138,19 @@ export async function handleDownloader(sock, msg, args) {
   const timestamp = Date.now();
   const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
 
+  let downloadUrl = url;
+  if (isTikTokUrl(url)) {
+    try {
+      downloadUrl = await resolveTikTokUrl(url);
+    } catch {
+      downloadUrl = url;
+    }
+  }
+
   try {
     let info;
     try {
-      info = await getInfoWithYtdlp(url);
+      info = await getInfoWithYtdlp(downloadUrl);
     } catch {
       info = null;
     }
@@ -144,7 +170,7 @@ export async function handleDownloader(sock, msg, args) {
       text: `Mengunduh: *${title}*\nCreator: ${uploader}\nHarap tunggu...`,
     });
 
-    await downloadWithYtdlp(url, outputPath);
+    await downloadWithYtdlp(downloadUrl, outputPath);
 
     if (!fs.existsSync(outputPath)) {
       throw new Error('File tidak ditemukan setelah download');
