@@ -42,15 +42,25 @@ function isSupportedUrl(url) {
 }
 
 async function downloadWithYtdlp(url, outputPath) {
+  const isTikTok = isTikTokUrl(url);
+
   const args = [
     '--no-warnings',
     '--no-playlist',
     '--concurrent-fragments', '4',
     '--remux-video', 'mp4',
     '-f', 'best[ext=mp4]',
-    '-o', outputPath,
-    url,
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
   ];
+
+  if (isTikTok) {
+    args.push(
+      '--extractor-args', 'tiktok:api_hostname=api16-normal-useast5.us.tiktokv.com',
+      '--referer', 'https://www.tiktok.com/',
+    );
+  }
+
+  args.push('-o', outputPath, url);
 
   const { stdout, stderr } = await execFileAsync(YTDLP_PATH, args, {
     timeout: 120000,
@@ -61,12 +71,23 @@ async function downloadWithYtdlp(url, outputPath) {
 }
 
 async function getInfoWithYtdlp(url) {
+  const isTikTok = isTikTokUrl(url);
+
   const args = [
     '--no-warnings',
     '--no-playlist',
     '--dump-json',
-    url,
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
   ];
+
+  if (isTikTok) {
+    args.push(
+      '--extractor-args', 'tiktok:api_hostname=api16-normal-useast5.us.tiktokv.com',
+      '--referer', 'https://www.tiktok.com/',
+    );
+  }
+
+  args.push(url);
 
   const { stdout } = await execFileAsync(YTDLP_PATH, args, {
     timeout: 30000,
