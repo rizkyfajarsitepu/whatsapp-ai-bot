@@ -285,12 +285,18 @@ app.get('/api/groups', (req, res) => {
 });
 
 app.get('/api/groups/features/:groupId', requireLogin, (req, res) => {
+  if (req.session.role !== 'superadmin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+  }
   const { groupId } = req.params;
   const features = getGroupFeatures(groupId);
   res.json({ success: true, features });
 });
 
 app.post('/api/groups/features', express.json(), requireLogin, (req, res) => {
+  if (req.session.role !== 'superadmin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+  }
   const { groupId, features } = req.body;
   if (!groupId || !features) {
     return res.status(400).json({ success: false, error: 'groupId dan features wajib diisi' });

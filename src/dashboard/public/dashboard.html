@@ -130,14 +130,6 @@
       </div>
     </div>
 
-    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
-      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">⚙️ Pengaturan Fitur Grup</p>
-      <p class="text-gray-400 text-xs mb-3">Atur fitur yang aktif untuk grup Anda. Fitur yang OFF akan membuat bot diam tanpa respons.</p>
-      <div id="group-features-container">
-        <p class="text-gray-500 text-sm">Memuat pengaturan...</p>
-      </div>
-    </div>
-
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400 mb-3">🔮 Jalur Orang Dalam (RPG)</p>
       <div class="space-y-3">
@@ -671,8 +663,6 @@
       .then(me => {
         if (me.role === 'superadmin') {
           loadGroups();
-        } else {
-          loadGroupFeatures();
         }
       });
   </script>
