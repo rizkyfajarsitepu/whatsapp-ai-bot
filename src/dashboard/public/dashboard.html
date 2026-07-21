@@ -12,7 +12,8 @@
   <div class="w-full max-w-4xl mx-auto space-y-6">
     <h1 class="text-2xl font-bold text-center text-purple-400">Control Panel Bot - RyzarsAI</h1>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div id="super-admin-menu" class="hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
       <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
         <p class="text-sm text-gray-400 uppercase tracking-wide">Status</p>
         <p class="text-xl font-semibold mt-1 flex items-center gap-2">
@@ -31,8 +32,6 @@
         <p class="text-xl font-semibold mt-1" id="total-users">{{TOTAL_USERS}}</p>
       </div>
     </div>
-
-    <div id="super-admin-menu" class="hidden">
     <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
       <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-3">📢 Broadcast Panel</p>
       <textarea id="broadcastText" rows="4" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition duration-200" placeholder="Tulis pesan broadcast di sini..."></textarea>
