@@ -38,20 +38,25 @@ function isFacebookUrl(url) {
   return /facebook\.com|fb\.watch/i.test(url);
 }
 
-async function resolveTikTokUrl(url) {
-  try {
-    const { data } = await axios.get('https://www.tiktok.com/oembed', {
-      params: { url, format: 'json' },
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      },
-    });
-    if (data && data.author_url) {
-      return data.author_url;
-    }
-  } catch {}
-  return url;
+async function downloadTikTok(url) {
+  const { data } = await axios.get('https://tikwm.com/api/', {
+    params: { url, hd: 1 },
+    timeout: 20000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    },
+  });
+
+  if (data?.code !== 0 || !data?.data?.play) {
+    throw new Error(data?.msg || 'Gagal mendapatkan URL video TikTok');
+  }
+
+  return {
+    title: data.data.title || 'TikTok Video',
+    uploader: data.data.author?.nickname || data.data.author?.unique_id || 'TikTok',
+    videoUrl: data.data.play,
+    duration: data.data.duration,
+  };
 }
 
 function isSupportedUrl(url) {
@@ -135,22 +140,67 @@ export async function handleDownloader(sock, msg, args) {
 
   await sock.sendMessage(chatId, { react: { text: '⏳', key: msg.key } });
 
-  const timestamp = Date.now();
-  const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
-
-  let downloadUrl = url;
   if (isTikTokUrl(url)) {
     try {
-      downloadUrl = await resolveTikTokUrl(url);
-    } catch {
-      downloadUrl = url;
+      const tikInfo = await downloadTikTok(url);
+      await sock.sendMessage(chatId, {
+        text: `Mengunduh: *${tikInfo.title}*\nCreator: ${tikInfo.uploader}\nHarap tunggu...`,
+      });
+
+      const timestamp = Date.now();
+      const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
+
+      const videoResp = await axios.get(tikInfo.videoUrl, {
+        responseType: 'stream',
+        timeout: 60000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+
+      const writer = fs.createWriteStream(outputPath);
+      videoResp.data.pipe(writer);
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+
+      const fileStat = fs.statSync(outputPath);
+      const fileSizeMB = fileStat.size / (1024 * 1024);
+
+      if (fileSizeMB > 100) {
+        cleanupFile(outputPath);
+        await sock.sendMessage(chatId, {
+          text: `Ukuran file terlalu besar (${fileSizeMB.toFixed(1)} MB). Batas maksimal 100 MB.`,
+        });
+        return;
+      }
+
+      const fileBuffer = fs.readFileSync(outputPath);
+      await sock.sendMessage(chatId, {
+        video: fileBuffer,
+        mimetype: 'video/mp4',
+        caption: `*${tikInfo.title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
+      });
+
+      cleanupFile(outputPath);
+      return;
+    } catch (tikErr) {
+      console.error('[Downloader] TikTok API Error:', tikErr.message);
+      await sock.sendMessage(chatId, {
+        text: `Gagal mengunduh TikTok: ${tikErr.message}`,
+      });
+      return;
     }
   }
+
+  const timestamp = Date.now();
+  const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
 
   try {
     let info;
     try {
-      info = await getInfoWithYtdlp(downloadUrl);
+      info = await getInfoWithYtdlp(url);
     } catch {
       info = null;
     }
@@ -170,7 +220,7 @@ export async function handleDownloader(sock, msg, args) {
       text: `Mengunduh: *${title}*\nCreator: ${uploader}\nHarap tunggu...`,
     });
 
-    await downloadWithYtdlp(downloadUrl, outputPath);
+    await downloadWithYtdlp(url, outputPath);
 
     if (!fs.existsSync(outputPath)) {
       throw new Error('File tidak ditemukan setelah download');
