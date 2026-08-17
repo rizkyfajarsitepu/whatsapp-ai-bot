@@ -337,8 +337,12 @@ async function main() {
   initSTT();
   initGoogleDrive();
   startBackupScheduler();
-  const sock = await startBot(handleMessage, featureToggles, setDashboardSock);
-  startDashboard(sock, featureToggles);
+
+  startDashboard(null, featureToggles);
+
+  startBot(handleMessage, featureToggles, setDashboardSock).catch((err) => {
+    logger.fatal(err, 'Fatal error saat start bot');
+  });
 }
 
 main().catch((err) => {
