@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import logger from './logger.js';
 import { config } from '../config/settings.js';
 
@@ -89,7 +90,7 @@ export async function uploadToDrive(fileBuffer, fileName, mimeType = 'applicatio
       requestBody: fileMetadata,
       media: {
         mimeType,
-        body: Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer),
+        body: Readable.from(Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer)),
       },
       fields: 'id,name,mimeType,size,webViewLink',
     });
@@ -97,7 +98,11 @@ export async function uploadToDrive(fileBuffer, fileName, mimeType = 'applicatio
     logger.info({ fileId: res.data.id, name: res.data.name, size: res.data.size }, 'File berhasil diupload ke Google Drive');
     return res.data;
   } catch (err) {
-    logger.error({ err, fileName }, 'Gagal upload ke Google Drive');
+    if (err.response?.status === 403) {
+      logger.error({ err, fileName }, 'Gagal upload ke Google Drive (403): Service Account tidak punya storage quota. Gunakan GOOGLE_DRIVE_TYPE=oauth2 dengan akun Google pribadi, atau upload ke Shared Drive.');
+    } else {
+      logger.error({ err, fileName }, 'Gagal upload ke Google Drive');
+    }
     throw err;
   }
 }

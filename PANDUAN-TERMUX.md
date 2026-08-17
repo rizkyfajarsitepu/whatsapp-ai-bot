@@ -224,6 +224,82 @@ pm2 akan otomatis **restart** bot kalau crash/koneksi putus.
 
 ---
 
+## Bagian 7 — Google Drive (Upload Media & Auto-Backup Database)
+
+Bot bisa otomatis menyimpan media hasil `!dl` ke Google Drive dan mem-backup
+database `chat_history.db` setiap 24 jam. Butuh file kredensial Service Account
+(`credentials.json`).
+
+### 1. Lokasi file key di HP
+
+Simpan `credentials.json` di folder **Documents/Bot** di HP:
+
+```
+/storage/emulated/0/Documents/Bot/credentials.json
+```
+
+### 2. Konfigurasi di `.env` (arahkan langsung ke lokasi file di HP)
+
+Karena file key sudah pasti ada di `/storage/emulated/0/Documents/Bot/credentials.json`,
+tidak perlu symlink — cukup arahkan path-nya langsung di `.env`:
+
+```bash
+nano ~/whatsapp-ai-bot/.env
+```
+
+Tambahkan:
+
+```env
+GOOGLE_DRIVE_ENABLED=true
+GOOGLE_DRIVE_TYPE=service_account
+GOOGLE_DRIVE_CREDENTIALS_PATH=/storage/emulated/0/Documents/Bot/credentials.json
+GOOGLE_DRIVE_FOLDER_ID=1c9zMtaT9sKVAYv3e9vICG5ChMNLWBX8t
+GOOGLE_DRIVE_BACKUP_ENABLED=true
+GOOGLE_DRIVE_BACKUP_FOLDER_ID=isi_id_folder_backup_kamu
+GOOGLE_DRIVE_BACKUP_CRON=0 0 * * *
+GOOGLE_DRIVE_BACKUP_ON_START=true
+```
+
+> Path `/storage/emulated/0` sudah bisa dibaca Termux setelah `termux-setup-storage`.
+> Pastikan file benar-benar ada: `ls -l /storage/emulated/0/Documents/Bot/credentials.json`
+>
+> Alternatif (agar path konsisten seperti di PC): pakai symlink —
+> `ln -sf /storage/emulated/0/Documents/Bot/credentials.json ~/whatsapp-ai-bot/src/config/credentials.json`
+> lalu `GOOGLE_DRIVE_CREDENTIALS_PATH=./src/config/credentials.json`
+
+Cara mendapat `GOOGLE_DRIVE_FOLDER_ID`: buka folder di browser
+(`drive.google.com`) → ID-nya adalah string panjang di URL setelah
+`/drive/folders/`. Beri akses "Editor" ke email service account
+(`bot-uploader@...iam.gserviceaccount.com`) pada folder tersebut.
+
+### 3. Install dependency baru & restart
+
+`googleapis` dan `node-cron` murni JavaScript (tidak perlu dikompilasi):
+
+```bash
+cd ~/whatsapp-ai-bot
+git pull
+npm install --ignore-scripts
+npm install --no-save --package-lock=false node-addon-api node-gyp
+npm rebuild better-sqlite3
+npm run pm2:restart
+```
+
+Cek log:
+
+```bash
+pm2 logs whatsapp-ai-bot
+```
+
+Harus muncul:
+
+```
+✅ Google Drive API berhasil diinisialisasi
+✅ Scheduler backup database aktif
+```
+
+---
+
 ## Catatan Keamanan & Operasional
 
 - **Pakai nomor WhatsApp cadangan**, bukan nomor utama. WhatsApp resmi bisa
