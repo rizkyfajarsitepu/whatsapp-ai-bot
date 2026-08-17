@@ -227,32 +227,52 @@ pm2 akan otomatis **restart** bot kalau crash/koneksi putus.
 ## Bagian 7 — Google Drive (Upload Media & Auto-Backup Database)
 
 Bot bisa otomatis menyimpan media hasil `!dl` ke Google Drive dan mem-backup
-database `chat_history.db` setiap 24 jam. Butuh file kredensial Service Account
-(`credentials.json`).
+database `chat_history.db` setiap 24 jam.
 
-### 1. Lokasi file key di HP
+> **Penting:** Google Drive memakai **OAuth2** (akun Google pribadi).
+> **Service Account TIDAK bisa** dipakai untuk upload ke Drive pribadi karena
+> tidak punya storage quota (error `403 Service Accounts do not have storage quota`).
 
-Simpan `credentials.json` di folder **Documents/Bot** di HP:
+### 1. Buat OAuth client di Google Cloud Console
 
+1. Buka https://console.cloud.google.com → buat project baru (mis. `whatsapp-bot-oauth`)
+   atau pakai project yang sudah kamu akses.
+2. **APIs & Services → Library** → cari **Google Drive API** → **Enable**.
+3. **OAuth consent screen** → **External** → isi nama app + email → **Save**.
+   Di **Audience**, tambahkan **email Google kamu** sebagai **Test user**.
+4. **Credentials → Create Credentials → OAuth client ID** → Application type:
+   **Desktop app** → **Create**. Salin **Client ID** dan **Client Secret**.
+
+> Jika tab External tidak muncul, brand sudah pernah dibuat — langsung ke bagian
+> **Audience** untuk menambah test user. Jika error "You need additional access",
+> kamu tidak punya akses ke project itu → buat project baru.
+
+### 2. Generate refresh token (sekali saja)
+
+Di folder project (`~/whatsapp-ai-bot`), dengan client ID/secret sudah terisi di `.env`:
+
+```bash
+node scripts/generateDriveToken.js
 ```
-/storage/emulated/0/Documents/Bot/credentials.json
-```
 
-### 2. Konfigurasi di `.env` (arahkan langsung ke lokasi file di HP)
+1. Buka URL yang dicetak di browser (login akun Google) → **Allow**.
+2. Browser diarahkan ke `http://localhost/?code=...` (halaman error itu normal).
+3. Salin kode setelah `code=`, tempel di terminal → script mencetak
+   `GOOGLE_DRIVE_REFRESH_TOKEN=...`.
 
-Karena file key sudah pasti ada di `/storage/emulated/0/Documents/Bot/credentials.json`,
-tidak perlu symlink — cukup arahkan path-nya langsung di `.env`:
+### 3. Konfigurasi di `.env`
 
 ```bash
 nano ~/whatsapp-ai-bot/.env
 ```
 
-Tambahkan:
-
 ```env
 GOOGLE_DRIVE_ENABLED=true
-GOOGLE_DRIVE_TYPE=service_account
-GOOGLE_DRIVE_CREDENTIALS_PATH=/storage/emulated/0/Documents/Bot/credentials.json
+GOOGLE_DRIVE_TYPE=oauth2
+GOOGLE_DRIVE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_DRIVE_CLIENT_SECRET=GOCSPX-xxxx
+GOOGLE_DRIVE_REFRESH_TOKEN=1//0xxxx
+GOOGLE_DRIVE_REDIRECT_URI=http://localhost
 GOOGLE_DRIVE_FOLDER_ID=1c9zMtaT9sKVAYv3e9vICG5ChMNLWBX8t
 GOOGLE_DRIVE_BACKUP_ENABLED=true
 GOOGLE_DRIVE_BACKUP_FOLDER_ID=isi_id_folder_backup_kamu
@@ -260,19 +280,14 @@ GOOGLE_DRIVE_BACKUP_CRON=0 0 * * *
 GOOGLE_DRIVE_BACKUP_ON_START=true
 ```
 
-> Path `/storage/emulated/0` sudah bisa dibaca Termux setelah `termux-setup-storage`.
-> Pastikan file benar-benar ada: `ls -l /storage/emulated/0/Documents/Bot/credentials.json`
->
-> Alternatif (agar path konsisten seperti di PC): pakai symlink —
-> `ln -sf /storage/emulated/0/Documents/Bot/credentials.json ~/whatsapp-ai-bot/src/config/credentials.json`
-> lalu `GOOGLE_DRIVE_CREDENTIALS_PATH=./src/config/credentials.json`
-
 Cara mendapat `GOOGLE_DRIVE_FOLDER_ID`: buka folder di browser
 (`drive.google.com`) → ID-nya adalah string panjang di URL setelah
-`/drive/folders/`. Beri akses "Editor" ke email service account
-(`bot-uploader@...iam.gserviceaccount.com`) pada folder tersebut.
+`/drive/folders/`.
 
-### 3. Install dependency baru & restart
+> Nilai `CLIENT_ID`, `CLIENT_SECRET`, `REFRESH_TOKEN`, dan `FOLDER_ID` sama seperti
+> yang dipakai di PC — cukup salin. Nilai yang sama bekerja di semua perangkat.
+
+### 4. Install dependency & restart
 
 `googleapis` dan `node-cron` murni JavaScript (tidak perlu dikompilasi):
 
@@ -286,6 +301,7 @@ npm run pm2:restart
 ```
 
 Cek log:
+
 
 ```bash
 pm2 logs whatsapp-ai-bot
