@@ -75,6 +75,13 @@ export function isDriveReady() {
   return initGoogleDrive() !== null;
 }
 
+export function normalizeFolderId(folderId) {
+  if (!folderId) return null;
+  const str = String(folderId).trim();
+  if (str === '' || /^<.*>$/.test(str)) return null;
+  return str;
+}
+
 export async function uploadToDrive(fileBuffer, fileName, mimeType = 'application/octet-stream', folderId = config.GOOGLE_DRIVE_FOLDER_ID) {
   const drive = initGoogleDrive();
   if (!drive) {
@@ -83,7 +90,8 @@ export async function uploadToDrive(fileBuffer, fileName, mimeType = 'applicatio
   }
 
   const fileMetadata = { name: fileName };
-  if (folderId) fileMetadata.parents = [folderId];
+  const targetFolder = normalizeFolderId(folderId);
+  if (targetFolder) fileMetadata.parents = [targetFolder];
 
   try {
     const res = await drive.files.create({
@@ -137,5 +145,5 @@ export function cleanupLocalFile(filePath) {
 }
 
 export function getDriveFolderId() {
-  return config.GOOGLE_DRIVE_FOLDER_ID || null;
+  return normalizeFolderId(config.GOOGLE_DRIVE_FOLDER_ID);
 }

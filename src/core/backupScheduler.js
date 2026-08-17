@@ -5,12 +5,12 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import { config } from '../config/settings.js';
 import logger from '../utils/logger.js';
-import { uploadToDrive, isDriveReady, cleanupLocalFile } from '../utils/googleDrive.js';
+import { uploadToDrive, isDriveReady, cleanupLocalFile, normalizeFolderId } from '../utils/googleDrive.js';
 
 const DB_MIME_TYPE = 'application/vnd.sqlite3';
 
 function getBackupFolderId() {
-  return config.GOOGLE_DRIVE_BACKUP_FOLDER_ID || config.GOOGLE_DRIVE_FOLDER_ID || null;
+  return normalizeFolderId(config.GOOGLE_DRIVE_BACKUP_FOLDER_ID) || normalizeFolderId(config.GOOGLE_DRIVE_FOLDER_ID) || null;
 }
 
 export async function backupDatabase() {
