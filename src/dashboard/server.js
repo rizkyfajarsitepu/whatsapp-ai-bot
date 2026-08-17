@@ -485,6 +485,10 @@ io.on('connection', (socket) => {
   });
 });
 
+export function setDashboardSock(sock) {
+  dashboardSock = sock;
+}
+
 export function startDashboard(sock, featureToggles) {
   dashboardSock = sock;
   dashboardToggles = featureToggles;

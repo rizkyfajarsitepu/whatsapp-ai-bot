@@ -6,15 +6,32 @@ import {
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import path from 'path';
+import fs from 'fs';
 import logger from '../utils/logger.js';
 import { handleWelcomeEvent } from '../events/welcome.js';
 
 const baileysLogger = logger.child({ module: 'baileys' }, { level: 'silent' });
 
-export async function startBot(messageHandler, featureToggles = {}) {
-  const { state, saveCreds } = await useMultiFileAuthState(
-    path.resolve('auth_info')
-  );
+const AUTH_DIR = path.resolve('auth_info');
+const RESTART_DELAY_MS = 3000;
+
+let restartTimer = null;
+
+function clearAuthState() {
+  try {
+    if (fs.existsSync(AUTH_DIR)) {
+      for (const file of fs.readdirSync(AUTH_DIR)) {
+        fs.rmSync(path.join(AUTH_DIR, file), { force: true });
+      }
+    }
+    logger.info('Sesi WhatsApp lama berhasil dihapus.');
+  } catch (err) {
+    logger.warn({ err }, 'Gagal menghapus sesi lama');
+  }
+}
+
+export async function startBot(messageHandler, featureToggles = {}, onSocketChange = () => {}) {
+  const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
   const { version } = await fetchLatestBaileysVersion();
 
@@ -27,6 +44,8 @@ export async function startBot(messageHandler, featureToggles = {}) {
     markOnlineOnConnect: true,
   });
 
+  onSocketChange(sock);
+
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -38,16 +57,22 @@ export async function startBot(messageHandler, featureToggles = {}) {
 
     if (connection === 'close') {
       const reason = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = reason !== DisconnectReason.loggedOut;
+      const isLoggedOut = reason === DisconnectReason.loggedOut;
 
-      logger.warn({ reason, shouldReconnect }, 'Koneksi terputus');
+      logger.warn({ reason, shouldReconnect: !isLoggedOut }, 'Koneksi terputus');
 
-      if (shouldReconnect) {
-        logger.info('Mencoba reconnect dalam 3 detik...');
-        setTimeout(() => startBot(messageHandler, featureToggles), 3000);
-      } else {
-        logger.fatal('Logged out. Silakan scan QR ulang.');
+      if (isLoggedOut) {
+        logger.fatal('Sesi WhatsApp tidak valid (logged out). Menghapus sesi lama untuk meminta QR ulang...');
+        clearAuthState();
       }
+
+      logger.info('Mencoba restart koneksi dalam 3 detik...');
+      clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        startBot(messageHandler, featureToggles, onSocketChange).catch((err) => {
+          logger.fatal({ err }, 'Gagal restart koneksi');
+        });
+      }, RESTART_DELAY_MS);
     }
 
     if (connection === 'open') {

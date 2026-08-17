@@ -15,11 +15,13 @@ import { initVision, handleProactiveVision } from './features/aiImageVision.js';
 import { handleYoutubeSummary } from './features/youtubeSummarizer.js';
 import { handleTextToImage } from './features/textToImage.js';
 import { activePersonas, handleToggleMode, handlePersonaChat } from './features/personaMode.js';
-import { startDashboard } from './dashboard/server.js';
+import { startDashboard, setDashboardSock } from './dashboard/server.js';
 import { checkRateLimit, getRateLimitMessage } from './middlewares/rateLimiter.js';
 import logger from './utils/logger.js';
 import { verifyGroupStatus, getGroupFeatures } from './core/groupManager.js';
 import { handleLeveling, getProfileStats } from './features/rpg.js';
+import { initGoogleDrive } from './utils/googleDrive.js';
+import { startBackupScheduler } from './core/backupScheduler.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -333,7 +335,9 @@ async function main() {
   initGemini();
   initVision();
   initSTT();
-  const sock = await startBot(handleMessage, featureToggles);
+  initGoogleDrive();
+  startBackupScheduler();
+  const sock = await startBot(handleMessage, featureToggles, setDashboardSock);
   startDashboard(sock, featureToggles);
 }
 

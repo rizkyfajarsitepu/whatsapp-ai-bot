@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import axios from 'axios';
+import { uploadToDrive } from '../utils/googleDrive.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -20,6 +21,18 @@ function cleanupFile(filePath) {
       fs.unlinkSync(filePath);
     }
   } catch {}
+}
+
+async function uploadMediaToDrive(fileBuffer, baseName, mimeType) {
+  try {
+    const fileName = `${baseName.replace(/[^\w\- .]+/g, '_').slice(0, 80)}`;
+    const fileData = await uploadToDrive(fileBuffer, fileName, mimeType);
+    if (fileData) {
+      console.log(`☁️ [Downloader] Media disimpan ke Google Drive: ${fileName}`);
+    }
+  } catch (err) {
+    console.error('[Downloader] Gagal upload media ke Google Drive:', err.message);
+  }
 }
 
 function isYouTubeUrl(url) {
@@ -183,6 +196,7 @@ export async function handleDownloader(sock, msg, args) {
         caption: `*${tikInfo.title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
       });
 
+      await uploadMediaToDrive(fileBuffer, `${tikInfo.title}_${timestamp}.mp4`, 'video/mp4');
       cleanupFile(outputPath);
       return;
     } catch (tikErr) {
@@ -245,12 +259,14 @@ export async function handleDownloader(sock, msg, args) {
         audio: fileBuffer,
         mimetype: 'audio/mpeg',
       });
+      await uploadMediaToDrive(fileBuffer, `${title}_${timestamp}.mp3`, 'audio/mpeg');
     } else {
       await sock.sendMessage(chatId, {
         video: fileBuffer,
         mimetype: 'video/mp4',
         caption: `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
       });
+      await uploadMediaToDrive(fileBuffer, `${title}_${timestamp}.mp4`, 'video/mp4');
     }
 
     console.log(`[Downloader] File terkirim ke ${chatId}: ${path.basename(outputPath)}`);
