@@ -26,11 +26,16 @@ function cleanupFile(filePath) {
 
 const MAX_SEND_ATTEMPTS = 2;
 
-async function sendMediaWithRetry(sock, chatId, content) {
+async function sendMediaWithRetry(sock, chatId, content, msg) {
+  const sendOptions = {
+    quoted: msg,
+    mediaUploadTimeoutMs: 120000,
+  };
+
   let lastErr;
   for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
     try {
-      await sock.sendMessage(chatId, content);
+      await sock.sendMessage(chatId, content, sendOptions);
       return;
     } catch (err) {
       lastErr = err;
@@ -41,6 +46,47 @@ async function sendMediaWithRetry(sock, chatId, content) {
     }
   }
   throw lastErr;
+}
+
+async function sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg) {
+  const fileSizeMB = fileBuffer.length / (1024 * 1024);
+  const caption = `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`;
+
+  if (fileSizeMB > 100) {
+    await uploadMediaToDrive(fileBuffer, `${fileName}.mp4`, 'video/mp4');
+    await sock.sendMessage(chatId, {
+      text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
+    }, { quoted: msg });
+    return { status: 'skipped' };
+  }
+
+  if (fileSizeMB > 45) {
+    await sendMediaWithRetry(sock, chatId, {
+      document: fileBuffer,
+      fileName: `${fileName}.mp4`,
+      mimetype: 'video/mp4',
+      caption: `${caption}\n\n*(Dikirim sebagai dokumen karena ukuran file > 45MB)*`,
+    }, msg);
+    return { status: 'sent' };
+  }
+
+  try {
+    await sendMediaWithRetry(sock, chatId, {
+      video: fileBuffer,
+      mimetype: 'video/mp4',
+      caption,
+    }, msg);
+  } catch (uploadErr) {
+    console.warn('[Downloader] Gagal kirim sebagai video, mencoba kirim sebagai dokumen...', uploadErr.message);
+    await sendMediaWithRetry(sock, chatId, {
+      document: fileBuffer,
+      fileName: `${fileName}.mp4`,
+      mimetype: 'video/mp4',
+      caption: `${caption}\n\n*(Dikirim sebagai file dokumen)*`,
+    }, msg);
+  }
+
+  return { status: 'sent' };
 }
 
 async function uploadMediaToDrive(fileBuffer, baseName, mimeType) {
@@ -125,6 +171,7 @@ async function downloadWithYtdlp(url, outputPath) {
     '--retries', '3',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     '--extractor-args', 'youtube:player_client=android',
+    '--max-filesize', '70M',
     '-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[ext=mp4][height<=720]/b',
     '--merge-output-format', 'mp4',
     '-o', outputPath,
@@ -185,18 +232,8 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
   try {
     await downloadWithYtdlp(url, outputPath);
 
-    if (!fs.existsSync(outputPath)) {
-      throw new Error('File tidak ditemukan setelah download');
-    }
-
-    const fileStat = fs.statSync(outputPath);
-    const fileSizeMB = fileStat.size / (1024 * 1024);
-
-    if (fileSizeMB > 100) {
-      await sock.sendMessage(chatId, {
-        text: `Ukuran file terlalu besar (${fileSizeMB.toFixed(1)} MB). Batas maksimal 100 MB.`,
-      });
-      return { status: 'skipped' };
+    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+      throw new Error('File hasil download kosong atau tidak ditemukan.');
     }
 
     const fileBuffer = fs.readFileSync(outputPath);
@@ -209,14 +246,13 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
       await sendMediaWithRetry(sock, chatId, {
         audio: fileBuffer,
         mimetype: 'audio/mpeg',
-      });
+      }, msg);
       await uploadMediaToDrive(fileBuffer, `Audio_${dateTime}.mp3`, 'audio/mpeg');
     } else {
-      await sendMediaWithRetry(sock, chatId, {
-        video: fileBuffer,
-        mimetype: 'video/mp4',
-        caption: `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
-      });
+      const result = await sendVideoMedia(sock, chatId, fileBuffer, title, `${platform}_${dateTime}`, msg);
+      if (result?.status === 'skipped') {
+        return { status: 'skipped' };
+      }
       await uploadMediaToDrive(fileBuffer, `${platform}_${dateTime}.mp4`, 'video/mp4');
     }
     console.log(`[Downloader] Media terkirim ke ${chatId} dalam ${((Date.now() - sendStart) / 1000).toFixed(1)}s: ${path.basename(outputPath)}`);
@@ -252,25 +288,12 @@ async function runTikTokApiFlow(sock, chatId, url, msg) {
       writer.on('error', reject);
     });
 
-    const fileStat = fs.statSync(outputPath);
-    const fileSizeMB = fileStat.size / (1024 * 1024);
-
-    if (fileSizeMB > 100) {
-      await sock.sendMessage(chatId, {
-        text: `Ukuran file terlalu besar (${fileSizeMB.toFixed(1)} MB). Batas maksimal 100 MB.`,
-      });
-      return;
-    }
-
     const fileBuffer = fs.readFileSync(outputPath);
     const { dateTime } = getWIBTimestamp();
-    await sock.sendMessage(chatId, {
-      video: fileBuffer,
-      mimetype: 'video/mp4',
-      caption: `*${tikInfo.title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
-    });
-
-    await uploadMediaToDrive(fileBuffer, `TikTok_${dateTime}.mp4`, 'video/mp4');
+    const sendResult = await sendVideoMedia(sock, chatId, fileBuffer, tikInfo.title, `TikTok_${dateTime}`, msg);
+    if (sendResult?.status !== 'skipped') {
+      await uploadMediaToDrive(fileBuffer, `TikTok_${dateTime}.mp4`, 'video/mp4');
+    }
   } finally {
     cleanupFile(outputPath);
   }
