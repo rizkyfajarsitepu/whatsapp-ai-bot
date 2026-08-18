@@ -241,16 +241,16 @@ app.get('/dashboard', requireLogin, (req, res) => {
 
   let tableRows = '';
   if (totalUsers === 0) {
-    tableRows = `<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Belum ada data pengguna</td></tr>`;
+    tableRows = `<tr><td colspan="3" class="px-5 py-6 text-center text-[#64748B]">Belum ada data pengguna</td></tr>`;
   } else {
     let i = 1;
     for (const [jid, limiter] of limiters) {
       const remaining = limiter._reservoir ?? MAX_REQUESTS;
       const used = MAX_REQUESTS - remaining;
-      tableRows += `<tr class="border-b border-gray-700 hover:bg-gray-700">
-        <td class="px-4 py-3">${i}</td>
-        <td class="px-4 py-3 font-mono text-sm">${jid}</td>
-        <td class="px-4 py-3">${used} / ${MAX_REQUESTS}</td>
+      tableRows += `<tr class="border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition">
+        <td class="px-5 py-3">${i}</td>
+        <td class="px-5 py-3 font-mono text-sm">${jid}</td>
+        <td class="px-5 py-3">${used} / ${MAX_REQUESTS}</td>
       </tr>`;
       i++;
     }
