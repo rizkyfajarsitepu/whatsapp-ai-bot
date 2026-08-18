@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import axios from 'axios';
 import { uploadToDrive } from '../utils/googleDrive.js';
+import { getWIBTimestamp } from '../utils/dateTime.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -74,6 +75,14 @@ async function downloadTikTok(url) {
 
 function isSupportedUrl(url) {
   return isYouTubeUrl(url) || isTikTokUrl(url) || isInstagramUrl(url) || isFacebookUrl(url);
+}
+
+function getPlatformLabel(url) {
+  if (isTikTokUrl(url)) return 'TikTok';
+  if (isYouTubeUrl(url)) return 'YouTube';
+  if (isInstagramUrl(url)) return 'Instagram';
+  if (isFacebookUrl(url)) return 'Facebook';
+  return 'Media';
 }
 
 function buildYtdlpArgs() {
@@ -162,20 +171,22 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
 
     const fileBuffer = fs.readFileSync(outputPath);
     const isAudio = info?.ext === 'mp3' || info?.acodec === 'none' || (info?.vcodec === 'none' && info?.acodec);
+    const { dateTime } = getWIBTimestamp();
+    const platform = getPlatformLabel(url);
 
     if (isAudio) {
       await sock.sendMessage(chatId, {
         audio: fileBuffer,
         mimetype: 'audio/mpeg',
       });
-      await uploadMediaToDrive(fileBuffer, `${title}_${timestamp}.mp3`, 'audio/mpeg');
+      await uploadMediaToDrive(fileBuffer, `Audio_${dateTime}.mp3`, 'audio/mpeg');
     } else {
       await sock.sendMessage(chatId, {
         video: fileBuffer,
         mimetype: 'video/mp4',
         caption: `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
       });
-      await uploadMediaToDrive(fileBuffer, `${title}_${timestamp}.mp4`, 'video/mp4');
+      await uploadMediaToDrive(fileBuffer, `${platform}_${dateTime}.mp4`, 'video/mp4');
     }
 
     console.log(`[Downloader] File terkirim ke ${chatId}: ${path.basename(outputPath)}`);
@@ -222,13 +233,14 @@ async function runTikTokApiFlow(sock, chatId, url, msg) {
     }
 
     const fileBuffer = fs.readFileSync(outputPath);
+    const { dateTime } = getWIBTimestamp();
     await sock.sendMessage(chatId, {
       video: fileBuffer,
       mimetype: 'video/mp4',
       caption: `*${tikInfo.title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
     });
 
-    await uploadMediaToDrive(fileBuffer, `${tikInfo.title}_${timestamp}.mp4`, 'video/mp4');
+    await uploadMediaToDrive(fileBuffer, `TikTok_${dateTime}.mp4`, 'video/mp4');
   } finally {
     cleanupFile(outputPath);
   }

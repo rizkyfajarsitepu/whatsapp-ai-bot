@@ -5,6 +5,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import { config } from '../config/settings.js';
 import logger from '../utils/logger.js';
+import { getWIBTimestamp } from '../utils/dateTime.js';
 import { uploadToDrive, isDriveReady, cleanupLocalFile, normalizeFolderId } from '../utils/googleDrive.js';
 
 const DB_MIME_TYPE = 'application/vnd.sqlite3';
@@ -31,8 +32,8 @@ export async function backupDatabase() {
     const fileBuffer = fs.readFileSync(tempBackupPath);
     cleanupLocalFile(tempBackupPath);
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `chat_history_${timestamp}.db`;
+    const { date } = getWIBTimestamp();
+    const fileName = `Chat_${date}.db`;
 
     const result = await uploadToDrive(fileBuffer, fileName, DB_MIME_TYPE, getBackupFolderId());
 

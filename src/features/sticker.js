@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { downloadMedia, getQuotedMessage, getMediaType } from '../utils/mediaHelper.js';
 import { uploadMediaAuto } from '../utils/googleDrive.js';
+import { getWIBTimestamp } from '../utils/dateTime.js';
 
 export const STICKER_SIZE = 512;
 
@@ -40,7 +41,8 @@ export async function handleSticker(sock, msg, textContent) {
       mimetype: 'image/webp',
     });
 
-    await uploadMediaAuto(webpBuffer, `stiker_${Date.now()}.webp`, 'image/webp');
+    const { dateTime } = getWIBTimestamp();
+    await uploadMediaAuto(webpBuffer, `Sticker_${dateTime}.webp`, 'image/webp');
 
     console.log(`📤 [Sticker] Stiker berhasil dikirim ke ${chatId}`);
   } catch (err) {
