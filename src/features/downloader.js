@@ -81,6 +81,7 @@ function buildYtdlpArgs() {
     '--no-warnings',
     '--no-playlist',
     '--concurrent-fragments', '4',
+    '--extractor-args', 'youtube:player_client=android,web',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
   ];
 }
@@ -279,8 +280,12 @@ export async function handleDownloader(sock, msg, args) {
     await runYtdlpFlow(sock, chatId, url, msg);
   } catch (err) {
     console.error('[Downloader] Error:', err);
+    const hint =
+      err.message.includes('403') || err.message.includes('Forbidden')
+        ? '\n\nTips: perbarui yt-dlp dengan perintah: pip install -U yt-dlp'
+        : '';
     await sock.sendMessage(chatId, {
-      text: `Gagal mengunduh media. Error: ${err.message}`,
+      text: `Gagal mengunduh media. Error: ${err.message}${hint}`,
     });
   }
 }
