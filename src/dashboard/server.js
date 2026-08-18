@@ -9,6 +9,7 @@ import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
 import { getGroupsDB, toggleGroupVerification, getGroupFeatures, setGroupFeatures, DEFAULT_FEATURES } from '../core/groupManager.js';
 import { getRpgDB, suntikXP } from '../features/rpg.js';
+import { getChatSummary, getChatHistory, deleteChatHistory, getDbStats } from '../ai/geminiClient.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -230,6 +231,37 @@ app.post('/api/kill-grup', express.json(), requireLogin, (req, res) => {
     } else {
         res.status(400).json({ success: false, message: 'Grup tersebut tidak ditemukan atau belum berlangganan.' });
     }
+});
+
+app.get('/api/chat/history', requireLogin, (req, res) => {
+  if (req.session.role !== 'superadmin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+  }
+  res.json({ success: true, chats: getChatSummary() });
+});
+
+app.get('/api/chat/history/:chatId', requireLogin, (req, res) => {
+  if (req.session.role !== 'superadmin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+  }
+  const { chatId } = req.params;
+  res.json({ success: true, messages: getChatHistory(chatId) });
+});
+
+app.delete('/api/chat/history/:chatId', requireLogin, (req, res) => {
+  if (req.session.role !== 'superadmin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+  }
+  const { chatId } = req.params;
+  const deleted = deleteChatHistory(chatId);
+  res.json({ success: true, deleted, message: `Riwayat ${chatId} berhasil dihapus (${deleted} pesan).` });
+});
+
+app.get('/api/db/info', requireLogin, (req, res) => {
+  if (req.session.role !== 'superadmin') {
+    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
+  }
+  res.json({ success: true, db: getDbStats() });
 });
 
 app.get('/dashboard', requireLogin, (req, res) => {
