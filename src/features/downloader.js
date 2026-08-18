@@ -24,6 +24,25 @@ function cleanupFile(filePath) {
   } catch {}
 }
 
+const MAX_SEND_ATTEMPTS = 2;
+
+async function sendMediaWithRetry(sock, chatId, content) {
+  let lastErr;
+  for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+    try {
+      await sock.sendMessage(chatId, content);
+      return;
+    } catch (err) {
+      lastErr = err;
+      console.warn(`[Downloader] Kirim media gagal (percobaan ${attempt}/${MAX_SEND_ATTEMPTS}): ${err.message}`);
+      if (attempt < MAX_SEND_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function uploadMediaToDrive(fileBuffer, baseName, mimeType) {
   try {
     const fileName = `${baseName.replace(/[^\w\- .]+/g, '_').slice(0, 80)}`;
@@ -106,16 +125,18 @@ async function downloadWithYtdlp(url, outputPath) {
     '--retries', '3',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     '--extractor-args', 'youtube:player_client=android',
-    '-f', 'b[ext=mp4][height<=720]/best[ext=mp4][height<=720]/bv*[height<=720]+ba/b',
+    '-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[ext=mp4][height<=720]/b',
     '--merge-output-format', 'mp4',
     '-o', outputPath,
     url,
   ];
 
-  await execFileAsync(YTDLP_PATH, args, {
+  const start = Date.now();
+  const { stderr } = await execFileAsync(YTDLP_PATH, args, {
     timeout: 240000,
     maxBuffer: 50 * 1024 * 1024,
   });
+  console.log(`[Downloader] yt-dlp selesai dalam ${((Date.now() - start) / 1000).toFixed(1)}s\n${stderr || ''}`);
 }
 
 async function getInfoWithYtdlp(url) {
@@ -125,10 +146,12 @@ async function getInfoWithYtdlp(url) {
     url,
   ];
 
+  const start = Date.now();
   const { stdout } = await execFileAsync(YTDLP_PATH, args, {
     timeout: 20000,
     maxBuffer: 10 * 1024 * 1024,
   });
+  console.log(`[Downloader] Ekstraksi info selesai dalam ${((Date.now() - start) / 1000).toFixed(1)}s`);
 
   return JSON.parse(stdout);
 }
@@ -181,22 +204,22 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
     const { dateTime } = getWIBTimestamp();
     const platform = getPlatformLabel(url);
 
+    const sendStart = Date.now();
     if (isAudio) {
-      await sock.sendMessage(chatId, {
+      await sendMediaWithRetry(sock, chatId, {
         audio: fileBuffer,
         mimetype: 'audio/mpeg',
       });
       await uploadMediaToDrive(fileBuffer, `Audio_${dateTime}.mp3`, 'audio/mpeg');
     } else {
-      await sock.sendMessage(chatId, {
+      await sendMediaWithRetry(sock, chatId, {
         video: fileBuffer,
         mimetype: 'video/mp4',
         caption: `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`,
       });
       await uploadMediaToDrive(fileBuffer, `${platform}_${dateTime}.mp4`, 'video/mp4');
     }
-
-    console.log(`[Downloader] File terkirim ke ${chatId}: ${path.basename(outputPath)}`);
+    console.log(`[Downloader] Media terkirim ke ${chatId} dalam ${((Date.now() - sendStart) / 1000).toFixed(1)}s: ${path.basename(outputPath)}`);
     return { status: 'sent' };
   } finally {
     cleanupFile(outputPath);

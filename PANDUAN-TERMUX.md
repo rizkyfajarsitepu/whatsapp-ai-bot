@@ -180,6 +180,15 @@ npm run pm2:start      # pm2 start ecosystem.config.cjs
 pm2 save               # simpan daftar proses utk auto-restore
 ```
 
+> **Anti IPv6 unreachable:** bot sudah dipaksa pakai rute IPv4 (`ipv4first`)
+> via `NODE_OPTIONS` di `ecosystem.config.cjs` dan `dns.setDefaultResultOrder`
+> di `src/index.js`. Jika menjalankan bot **tanpa pm2**, tambahkan variabel
+> berikut agar hasil sama:
+>
+> ```bash
+> NODE_OPTIONS="--dns-result-order=ipv4first" node src/index.js
+> ```
+
 Cek status & log:
 
 ```bash

@@ -1,3 +1,7 @@
+import dns from 'node:dns';
+
+dns.setDefaultResultOrder('ipv4first');
+
 import { startBot } from './core/connection.js';
 import { initGemini, chatWithHistory } from './ai/geminiClient.js';
 import { config } from './config/settings.js';
