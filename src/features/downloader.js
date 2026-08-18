@@ -76,50 +76,40 @@ function isSupportedUrl(url) {
   return isYouTubeUrl(url) || isTikTokUrl(url) || isInstagramUrl(url) || isFacebookUrl(url);
 }
 
-function buildYtdlpArgs(url) {
-  const isTikTok = isTikTokUrl(url);
-
-  const args = [
+function buildYtdlpArgs() {
+  return [
     '--no-warnings',
     '--no-playlist',
     '--concurrent-fragments', '4',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
   ];
-
-  if (isTikTok) {
-    args.push(
-      '--extractor-args', 'tiktok:platform=app',
-      '--force-ipv4',
-    );
-  }
-
-  return args;
 }
 
 async function downloadWithYtdlp(url, outputPath) {
   const args = [
-    ...buildYtdlpArgs(url),
+    ...buildYtdlpArgs(),
     '--remux-video', 'mp4',
-    '-f', 'best[ext=mp4]',
+    '--merge-output-format', 'mp4',
+    '-f', 'b[ext=mp4][height<=720]/bv*[height<=720][ext=mp4]+ba[ext=m4a]/b',
     '-o', outputPath,
     url,
   ];
 
   await execFileAsync(YTDLP_PATH, args, {
-    timeout: 180000,
+    timeout: 240000,
     maxBuffer: 50 * 1024 * 1024,
   });
 }
 
 async function getInfoWithYtdlp(url) {
   const args = [
-    ...buildYtdlpArgs(url),
+    ...buildYtdlpArgs(),
     '--dump-json',
     url,
   ];
 
   const { stdout } = await execFileAsync(YTDLP_PATH, args, {
-    timeout: 30000,
+    timeout: 20000,
     maxBuffer: 10 * 1024 * 1024,
   });
 
@@ -266,20 +256,22 @@ export async function handleDownloader(sock, msg, args) {
 
   if (isTikTokUrl(url)) {
     try {
-      const result = await runYtdlpFlow(sock, chatId, url, msg);
-      if (result?.status === 'sent' || result?.status === 'skipped') return;
-    } catch (ytErr) {
-      console.error('[Downloader] yt-dlp TikTok gagal, fallback ke API tikwm:', ytErr.message);
+      await runTikTokApiFlow(sock, chatId, url, msg);
+      return;
+    } catch (tikErr) {
+      console.error('[Downloader] TikTok API Error:', tikErr.message);
     }
 
     try {
-      await runTikTokApiFlow(sock, chatId, url, msg);
-    } catch (tikErr) {
-      console.error('[Downloader] TikTok API Error:', tikErr.message);
-      await sock.sendMessage(chatId, {
-        text: `Gagal mengunduh TikTok: ${tikErr.message}`,
-      });
+      const result = await runYtdlpFlow(sock, chatId, url, msg);
+      if (result?.status === 'sent' || result?.status === 'skipped') return;
+    } catch (ytErr) {
+      console.error('[Downloader] yt-dlp TikTok gagal:', ytErr.message);
     }
+
+    await sock.sendMessage(chatId, {
+      text: 'Gagal mengunduh TikTok. Coba lagi nanti ya.',
+    });
     return;
   }
 
