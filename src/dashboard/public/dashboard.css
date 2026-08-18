@@ -1,160 +1,22 @@
-/* ============================================================
-   RyzarsAI Dashboard — Executive Precision Design System
-   Base: #f6fafe | Surface: #ffffff | Primary: #624BFF
-   ============================================================ */
-
-* { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-
 .hidden { display: none !important; }
+.text-green-500 { color: #4CAF50; }
+.text-red-500 { color: #F44336; }
+.text-red-500-bold { color: #F44336; font-weight: bold; }
+.text-purple-400 { color: #c084fc; }
+.text-purple-400-sm { color: #c084fc; font-size: 13px; }
+.text-amber-400 { color: #fbbf24; }
+.text-warning { color: yellow; }
+.text-cyan-400 { color: #00ffcc; }
+.text-white-list { color: white; margin-top: 5px; }
+.text-pink-500 { color: #ff3366; }
+.text-error { color: red; }
+.border-left-red { border-left: 3px solid #F44336; }
 
-/* --- Elevation Level 1 (Cards) --- */
-.card {
-  background: #ffffff;
-  border: 1px solid #E2E8F0;
-  border-radius: 0.5rem;
-  box-shadow: 0px 2px 4px rgba(33, 43, 54, 0.05);
-  overflow: hidden;
-}
-
-.card-header {
-  border-bottom: 1px solid #E2E8F0;
-  padding: 16px 20px;
-}
-
-.card-body {
+.footer {
+  text-align: center;
   padding: 20px;
-}
-
-/* --- Labels (uppercase, tracked) --- */
-.label {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #64748B;
-}
-
-/* --- Inputs --- */
-.input {
-  background: #ffffff;
-  border: 1px solid #E2E8F0;
-  border-radius: 0.5rem;
-  padding: 12px 14px;
+  margin-top: 50px;
+  color: #666;
   font-size: 14px;
-  color: #212B36;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  border-top: 1px solid #333;
 }
-.input::placeholder { color: #94A3B8; }
-.input:focus {
-  border-color: #624BFF;
-  box-shadow: 0 0 0 2px rgba(98, 75, 255, 0.20);
-}
-
-/* --- Buttons --- */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #624BFF;
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 12px 16px;
-  border-radius: 0.5rem;
-  transition: background 0.15s ease;
-  cursor: pointer;
-}
-.btn-primary:hover { background: #4829E7; }
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #ffffff;
-  border: 1px solid #E2E8F0;
-  color: #212B36;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 12px 16px;
-  border-radius: 0.5rem;
-  transition: background 0.15s ease;
-  cursor: pointer;
-}
-.btn-secondary:hover { background: #F8FAFC; }
-
-.btn-danger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #DC2626;
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 12px 16px;
-  border-radius: 0.5rem;
-  transition: background 0.15s ease;
-  cursor: pointer;
-}
-.btn-danger:hover { background: #B91C1C; }
-
-/* --- Pills / Badges --- */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 12px;
-  border-radius: 9999px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  transition: opacity 0.15s ease;
-  cursor: pointer;
-}
-.pill-on { background: rgba(16, 185, 129, 0.10); color: #059669; }
-.pill-off { background: rgba(239, 68, 68, 0.10); color: #EF4444; }
-
-/* --- Terminal --- */
-.terminal {
-  background: #171C1F;
-  color: #4ADE80;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.6;
-  padding: 16px;
-  height: 280px;
-  overflow-y: auto;
-  border-radius: 0.5rem;
-}
-
-/* --- Sidebar active link --- */
-.active-link {
-  color: #ffffff !important;
-  background: rgba(98, 75, 255, 0.15) !important;
-  border-left: 3px solid #624BFF;
-}
-
-/* --- Semantic text helpers (JS-rendered) --- */
-.text-green-500 { color: #059669; }
-.text-red-500 { color: #DC2626; }
-.text-red-500-bold { color: #DC2626; font-weight: 700; }
-.text-purple-400 { color: #624BFF; }
-.text-purple-400-sm { color: #624BFF; font-size: 13px; }
-.text-amber-400 { color: #D97706; }
-.text-warning { color: #D97706; }
-.text-cyan-400 { color: #0891B2; }
-.text-white-list { color: #212B36; margin-top: 5px; }
-.text-pink-500 { color: #DB2777; }
-.text-error { color: #DC2626; }
-.border-left-red { border-left: 3px solid #DC2626; }
-
-/* --- Scrollbars --- */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
-.terminal::-webkit-scrollbar-thumb { background: #334155; }
-.terminal::-webkit-scrollbar-thumb:hover { background: #475569; }

@@ -1,308 +1,152 @@
 <!DOCTYPE html>
-<html lang="id" class="scroll-smooth">
+<html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RyzarsAI — Control Panel</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Control Panel Bot</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="/socket.io/socket.io.js"></script>
   <link rel="stylesheet" href="/dashboard.css">
 </head>
-<body class="bg-[#f6fafe] text-[#212B36] min-h-screen antialiased">
+<body class="bg-gray-900 text-white min-h-screen p-4">
+  <div class="w-full max-w-4xl mx-auto space-y-6">
+    <h1 class="text-2xl font-bold text-center text-purple-400">Control Panel Bot - RyzarsAI</h1>
 
-  <!-- Overlay mobile -->
-  <div id="sidebar-overlay" class="fixed inset-0 bg-black/40 z-30 hidden lg:hidden" onclick="toggleSidebar(false)"></div>
+    <div id="super-admin-menu" class="hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+        <p class="text-sm text-gray-400 uppercase tracking-wide">Status</p>
+        <p class="text-xl font-semibold mt-1 flex items-center gap-2">
+          <span class="w-3 h-3 bg-green-400 rounded-full inline-block"></span>
+          Online
+        </p>
+      </div>
 
-  <!-- Sidebar -->
-  <aside id="sidebar" class="fixed inset-y-0 left-0 w-64 bg-[#212B36] z-40 flex flex-col -translate-x-full lg:translate-x-0 transition-transform duration-300">
-    <div class="flex items-center gap-3 px-6 h-16 border-b border-white/10 shrink-0">
-      <div class="w-9 h-9 rounded-lg bg-[#624BFF] flex items-center justify-center text-white font-bold text-sm">R</div>
-      <div>
-        <p class="text-white font-semibold text-sm leading-tight">RyzarsAI</p>
-        <p class="text-white/50 text-[11px]">Control Panel Bot</p>
+      <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+        <p class="text-sm text-gray-400 uppercase tracking-wide">Uptime</p>
+        <p class="text-xl font-semibold mt-1">{{UPTIME_STR}}</p>
+      </div>
+
+      <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+        <p class="text-sm text-gray-400 uppercase tracking-wide">Total Pengguna</p>
+        <p class="text-xl font-semibold mt-1" id="total-users">{{TOTAL_USERS}}</p>
+      </div>
+    </div>
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-400 mb-3">📢 Broadcast Panel</p>
+      <textarea id="broadcastText" rows="4" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none resize-none transition duration-200" placeholder="Tulis pesan broadcast di sini..."></textarea>
+      <button onclick="kirimBroadcast()" class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold py-2 px-4 rounded w-full mt-3 transition duration-300 shadow-lg">📤 Kirim Broadcast</button>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-purple-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-3">🎫 Buat Voucher</p>
+      <div class="space-y-3">
+        <input id="input-durasi" type="number" placeholder="Durasi (hari)" value="30" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <input id="input-jumlah" type="number" placeholder="Jumlah voucher" value="1" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition duration-200">
+        <button onclick="generateVoucher()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎫 Buat Voucher</button>
+        <div id="voucher-result" class="text-sm text-gray-400 mt-2"></div>
       </div>
     </div>
 
-    <nav id="sidebar-nav" class="flex-1 overflow-y-auto py-4 px-3 space-y-1"></nav>
-
-    <div class="px-4 py-4 border-t border-white/10 shrink-0">
-      <div id="sidebar-user" class="flex items-center gap-3 mb-3 px-2"></div>
-      <a href="/api/logout" class="flex items-center gap-2 px-3 py-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 text-sm font-medium transition">
-        <span>↩</span> Logout
-      </a>
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-orange-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-400 mb-3">👤 Buat Akun Klien</p>
+      <div class="space-y-3">
+        <input id="input-uid" type="text" placeholder="ID Bot User" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="input-gid" type="text" placeholder="ID Grup (contoh: 62812xxx-123456@g.us)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="input-pass" type="text" placeholder="Password" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition duration-200">
+        <button onclick="generateAkun()" class="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">👤 Buat Akun</button>
+        <div id="akun-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
     </div>
-  </aside>
 
-  <!-- Mobile topbar -->
-  <header class="lg:hidden fixed top-0 inset-x-0 h-14 bg-[#212B36] z-30 flex items-center gap-3 px-4 shadow-lg">
-    <button onclick="toggleSidebar(true)" class="text-white/80 hover:text-white text-xl leading-none px-1">☰</button>
-    <div class="w-7 h-7 rounded-md bg-[#624BFF] flex items-center justify-center text-white font-bold text-xs">R</div>
-    <p class="text-white font-semibold text-sm">RyzarsAI Dashboard</p>
-  </header>
-
-  <!-- Main -->
-  <main class="lg:pl-64">
-    <div class="px-4 lg:px-8 pt-20 lg:pt-8 pb-8 max-w-6xl mx-auto">
-
-      <!-- Page header -->
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight text-[#212B36]">Control Panel</h1>
-          <p id="page-subtitle" class="text-sm text-[#64748B] mt-1">Memuat...</p>
-        </div>
-        <div id="role-badge" class="px-3 py-1 rounded-full bg-[#624BFF]/10 text-[#624BFF] text-xs font-semibold"></div>
-      </div>
-
-      <!-- ====== SUPER ADMIN ====== -->
-      <div id="super-admin-menu" class="hidden space-y-6">
-
-        <!-- Overview -->
-        <div id="overview">
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div class="card">
-              <p class="label">Status</p>
-              <p class="text-2xl font-semibold mt-2 flex items-center gap-2">
-                <span class="w-2.5 h-2.5 bg-[#10B981] rounded-full inline-block animate-pulse"></span>
-                Online
-              </p>
-            </div>
-            <div class="card">
-              <p class="label">Uptime</p>
-              <p class="text-2xl font-semibold mt-2">{{UPTIME_STR}}</p>
-            </div>
-            <div class="card">
-              <p class="label">Total Pengguna</p>
-              <p class="text-2xl font-semibold mt-2" id="total-users">{{TOTAL_USERS}}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Broadcast -->
-        <div id="broadcast" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">📢 Broadcast Panel</h2>
-          </div>
-          <div class="card-body">
-            <textarea id="broadcastText" rows="4" class="input w-full resize-none" placeholder="Tulis pesan broadcast di sini..."></textarea>
-            <button onclick="kirimBroadcast()" class="btn-primary w-full mt-4">📤 Kirim Broadcast</button>
-          </div>
-        </div>
-
-        <!-- Voucher -->
-        <div id="voucher" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">🎫 Buat Voucher</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <input id="input-durasi" type="number" placeholder="Durasi (hari)" value="30" class="input w-full">
-            <input id="input-jumlah" type="number" placeholder="Jumlah voucher" value="1" class="input w-full">
-            <button onclick="generateVoucher()" class="btn-primary w-full">🎫 Buat Voucher</button>
-            <div id="voucher-result" class="text-sm text-[#64748B] mt-2"></div>
-          </div>
-        </div>
-
-        <!-- Akun Klien -->
-        <div id="akun" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">👤 Buat Akun Klien</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <input id="input-uid" type="text" placeholder="ID Bot User" class="input w-full font-mono text-sm">
-            <input id="input-gid" type="text" placeholder="ID Grup (contoh: 62812xxx-123456@g.us)" class="input w-full font-mono text-sm">
-            <input id="input-pass" type="text" placeholder="Password" class="input w-full">
-            <button onclick="generateAkun()" class="btn-primary w-full">👤 Buat Akun</button>
-            <div id="akun-result" class="text-sm text-[#64748B] mt-2"></div>
-          </div>
-        </div>
-
-        <!-- Daftar Pengguna -->
-        <div id="pengguna" class="card overflow-hidden">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">📋 Daftar Pengguna</h2>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-              <thead>
-                <tr class="border-b border-[#E2E8F0] text-[#64748B] uppercase text-xs tracking-wider">
-                  <th class="px-5 py-3 font-semibold">#</th>
-                  <th class="px-5 py-3 font-semibold">ID Pengguna</th>
-                  <th class="px-5 py-3 font-semibold">Pemakaian</th>
-                </tr>
-              </thead>
-              <tbody id="user-table-body">{{TABLE_ROWS}}</tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Live Terminal -->
-        <div id="terminal" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">🖥️ Live Terminal</h2>
-          </div>
-          <div class="card-body">
-            <div id="terminal-box" class="terminal"></div>
-          </div>
-        </div>
-
-        <!-- Manajemen Fitur -->
-        <div id="fitur" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">⚙️ Manajemen Fitur</h2>
-          </div>
-          <div class="card-body">
-            <div id="toggle-container"></div>
-          </div>
-        </div>
-
-        <!-- Grup & Fitur -->
-        <div id="grup" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">👥 Manajemen Grup & Fitur</h2>
-          </div>
-          <div class="card-body">
-            <p class="text-xs text-[#64748B] mb-4">Klik tombol <strong class="text-[#212B36]">⚙️ Fitur</strong> untuk mengatur fitur spesifik per grup. Fitur yang OFF akan membuat bot diam (tidak merespons) saat command-nya dipanggil.</p>
-            <div id="group-container">
-              <p class="text-sm text-[#64748B]">Memuat daftar grup...</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cek Password -->
-        <div id="password" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">🔍 Cek Password Klien</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <input id="input-cek-id" type="text" placeholder="Masukkan ID Bot User (cth: 62812xxx@s.whatsapp.net)" class="input w-full font-mono text-sm">
-            <button onclick="cekPasswordKlien()" class="btn-secondary w-full">🔍 Cek Password</button>
-            <div id="cek-password-result" class="text-sm text-[#64748B] mt-2"></div>
-          </div>
-        </div>
-
-        <!-- Cabut Lisensi -->
-        <div id="lisensi" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">⚠️ Manajemen Grup (Cabut Lisensi)</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <p class="text-xs text-[#64748B]">Mencabut lisensi akan membuat bot langsung OFF di grup tersebut.</p>
-            <input id="input-kill-grup" type="text" placeholder="Masukkan ID Grup (cth: 12036xxx@g.us)" class="input w-full font-mono text-sm">
-            <button onclick="killGrup()" class="btn-danger w-full">⚠️ Cabut Lisensi / KILL</button>
-            <div id="kill-result" class="text-sm text-[#64748B] mt-2"></div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- ====== ADMIN GRUP ====== -->
-      <div id="admin-grup-menu" class="hidden space-y-6">
-
-        <div id="layanan" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">📊 Status Layanan Bot</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <div class="flex items-center justify-between py-2 border-b border-[#E2E8F0]">
-              <span class="text-sm text-[#64748B]">Status</span>
-              <strong id="status-badge" class="text-[#D97706]">Memuat...</strong>
-            </div>
-            <div class="flex items-center justify-between py-2">
-              <span class="text-sm text-[#64748B]">Masa Aktif Sampai</span>
-              <strong id="status-date" class="text-[#212B36]">-</strong>
-            </div>
-          </div>
-        </div>
-
-        <div id="redeem" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">🎟️ Redeem Voucher</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <input id="kodeVoucher" type="text" placeholder="Masukkan kode voucher" class="input w-full font-mono text-sm">
-            <button onclick="redeemVoucher()" class="btn-primary w-full">🎟️ Redeem</button>
-            <div id="redeem-result" class="text-sm text-[#64748B] mt-2"></div>
-          </div>
-        </div>
-
-        <div id="rpg" class="card">
-          <div class="card-header">
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-[#64748B]">🔮 Jalur Orang Dalam (RPG)</h2>
-          </div>
-          <div class="card-body space-y-3">
-            <input id="suntik-jid" type="text" placeholder="JID Target (contoh: 62812xxx@s.whatsapp.net)" class="input w-full font-mono text-sm">
-            <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="input w-full">
-            <button onclick="suntikXP()" class="btn-primary w-full">💉 Suntik XP</button>
-            <div id="suntik-result" class="text-sm text-[#64748B] mt-2"></div>
-            <button id="btnCekUser" class="btn-secondary w-full">🔍 Cek Status User (Intel)</button>
-            <div id="userInfoResult" class="text-sm text-[#64748B] mt-2"></div>
-          </div>
-        </div>
-
-      </div>
-
-      <footer class="text-center py-8 text-xs text-[#64748B]">
-        <p>© RyzarsAI · Executive Precision · v0.5.9</p>
-      </footer>
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700 overflow-x-auto">
+      <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Daftar Pengguna</p>
+      <table class="w-full text-left">
+        <thead>
+          <tr class="border-b border-gray-600 text-gray-400 text-sm uppercase">
+            <th class="px-4 py-2">#</th>
+            <th class="px-4 py-2">ID Pengguna</th>
+            <th class="px-4 py-2">Pemakaian</th>
+          </tr>
+        </thead>
+        <tbody id="user-table-body">{{TABLE_ROWS}}</tbody>
+      </table>
     </div>
-  </main>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-gray-700">
+      <p class="text-sm text-gray-400 uppercase tracking-wide mb-3">Live Terminal</p>
+      <div id="terminal-box" class="bg-black text-green-400 font-mono text-sm p-4 h-64 overflow-y-auto rounded-lg shadow-lg"></div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-teal-400 mb-3">⚙️ Manajemen Fitur</p>
+      <div id="toggle-container"></div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">👥 Manajemen Grup & Fitur</p>
+      <p class="text-gray-400 text-xs mb-3">Klik tombol <strong>⚙️ Fitur</strong> untuk mengatur fitur spesifik per grup. Fitur yang OFF akan membuat bot diam (tidak merespons) saat command-nya dipanggil.</p>
+      <div id="group-container">
+        <p class="text-gray-500 text-sm">Memuat daftar grup...</p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-yellow-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 mb-3">🔍 Cek Password Klien</p>
+      <div class="space-y-3">
+        <input id="input-cek-id" type="text" placeholder="Masukkan ID Bot User (cth: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="cekPasswordKlien()" class="bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Password</button>
+        <div id="cek-password-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-rose-400 mb-3">⚠️ Manajemen Grup (Cabut Lisensi)</p>
+      <p class="text-gray-400 text-xs mb-3">Mencabut lisensi akan membuat bot langsung OFF di grup tersebut.</p>
+      <div class="space-y-3">
+        <input id="input-kill-grup" type="text" placeholder="Masukkan ID Grup (cth: 12036xxx@g.us)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="killGrup()" class="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">⚠️ Cabut Lisensi / KILL</button>
+        <div id="kill-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="admin-grup-menu" class="hidden">
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-green-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-400 mb-3">📊 Status Layanan Bot</p>
+      <div class="space-y-2">
+        <p class="text-gray-300 text-sm">Status: <strong id="status-badge" class="text-yellow-400">Memuat...</strong></p>
+        <p class="text-gray-300 text-sm">Masa Aktif Sampai: <strong id="status-date" class="text-gray-400">-</strong></p>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-blue-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 mb-3">🎟️ Redeem Voucher</p>
+      <div class="space-y-3">
+        <input id="kodeVoucher" type="text" placeholder="Masukkan kode voucher" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition duration-200 font-mono text-sm">
+        <button onclick="redeemVoucher()" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🎟️ Redeem</button>
+        <div id="redeem-result" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-2xl p-5 shadow-lg border border-red-500/30">
+      <p class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-400 mb-3">🔮 Jalur Orang Dalam (RPG)</p>
+      <div class="space-y-3">
+        <input id="suntik-jid" type="text" placeholder="JID Target (contoh: 62812xxx@s.whatsapp.net)" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200 font-mono text-sm">
+        <input id="suntik-xp" type="number" placeholder="Jumlah XP" class="w-full bg-gray-900 text-white border border-gray-600 rounded-lg p-3 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none transition duration-200">
+        <button onclick="suntikXP()" class="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">💉 Suntik XP</button>
+        <div id="suntik-result" class="text-sm text-gray-400 mt-2"></div>
+        <button id="btnCekUser" class="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-2 px-4 rounded w-full transition duration-300 shadow-lg">🔍 Cek Status User (Intel)</button>
+        <div id="userInfoResult" class="text-sm text-gray-400 mt-2"></div>
+      </div>
+    </div>
+    </div>
+  </div>
 
   <script>
     const socket = io();
     const terminal = document.getElementById('terminal-box');
 
-    /* ---------- Sidebar ---------- */
-    const NAV_SUPER = [
-      { id: 'overview', label: 'Ringkasan', icon: '▦' },
-      { id: 'broadcast', label: 'Broadcast', icon: '📢' },
-      { id: 'voucher', label: 'Voucher', icon: '🎫' },
-      { id: 'akun', label: 'Akun Klien', icon: '👤' },
-      { id: 'pengguna', label: 'Pengguna', icon: '📋' },
-      { id: 'terminal', label: 'Live Terminal', icon: '⌨' },
-      { id: 'fitur', label: 'Manajemen Fitur', icon: '⚙' },
-      { id: 'grup', label: 'Grup & Fitur', icon: '👥' },
-      { id: 'password', label: 'Cek Password', icon: '🔍' },
-      { id: 'lisensi', label: 'Cabut Lisensi', icon: '⚠' },
-    ];
-    const NAV_ADMIN = [
-      { id: 'layanan', label: 'Status Layanan', icon: '📊' },
-      { id: 'redeem', label: 'Redeem Voucher', icon: '🎟' },
-      { id: 'rpg', label: 'Jalur Orang Dalam', icon: '🔮' },
-    ];
-
-    function toggleSidebar(open) {
-      const sb = document.getElementById('sidebar');
-      const ov = document.getElementById('sidebar-overlay');
-      if (open) {
-        sb.classList.remove('-translate-x-full');
-        ov.classList.remove('hidden');
-      } else {
-        sb.classList.add('-translate-x-full');
-        ov.classList.add('hidden');
-      }
-    }
-
-    function buildSidebar(items) {
-      const nav = document.getElementById('sidebar-nav');
-      nav.innerHTML = '';
-      for (const item of items) {
-        const a = document.createElement('a');
-        a.href = '#' + item.id;
-        a.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 text-sm font-medium transition';
-        a.dataset.nav = item.id;
-        a.innerHTML = '<span class="w-5 text-center text-base leading-none">' + item.icon + '</span><span>' + item.label + '</span>';
-        a.onclick = () => {
-          nav.querySelectorAll('a').forEach(x => x.classList.remove('active-link'));
-          a.classList.add('active-link');
-          toggleSidebar(false);
-        };
-        nav.appendChild(a);
-      }
-    }
-
-    /* ---------- Status & role ---------- */
     function loadGroupStatus() {
       fetch('/api/status-grup')
         .then(res => res.json())
@@ -311,13 +155,13 @@
             const badge = document.getElementById('status-badge');
             const dateEl = document.getElementById('status-date');
             if (data.isActive) {
-              badge.innerHTML = '<span class="text-[#059669]">🟢 AKTIF</span>';
+              badge.innerHTML = '<span class="text-green-500">\uD83D\uDFE2 AKTIF</span>';
               dateEl.textContent = data.expiredDate;
-              dateEl.style.color = '#059669';
+              dateEl.style.color = '#4CAF50';
             } else {
-              badge.innerHTML = '<span class="text-[#DC2626]">🔴 OFF (Belum Terverifikasi / Kedaluwarsa)</span>';
+              badge.innerHTML = '<span class="text-red-500">\uD83D\uDD34 OFF (Belum Terverifikasi / Kedaluwarsa)</span>';
               dateEl.textContent = 'Silakan redeem voucher.';
-              dateEl.style.color = '#DC2626';
+              dateEl.style.color = '#F44336';
             }
           }
         });
@@ -326,29 +170,16 @@
     fetch('/api/me')
       .then(res => res.json())
       .then(data => {
-        const subtitle = document.getElementById('page-subtitle');
-        const roleBadge = document.getElementById('role-badge');
-        const userBox = document.getElementById('sidebar-user');
-
         if (data.role === 'superadmin') {
           document.getElementById('super-admin-menu').classList.remove('hidden');
           document.getElementById('admin-grup-menu').classList.add('hidden');
-          buildSidebar(NAV_SUPER);
-          roleBadge.textContent = 'SUPER ADMIN';
-          subtitle.textContent = 'Kelola bot, voucher, grup, dan pengguna dalam satu panel.';
-          userBox.innerHTML = '<div class="w-8 h-8 rounded-full bg-[#624BFF]/20 text-[#C6C0FF] flex items-center justify-center text-xs font-bold shrink-0">SA</div><div class="min-w-0"><p class="text-white text-sm font-semibold truncate">Super Admin</p><p class="text-white/50 text-[11px]">Akses penuh</p></div>';
         } else {
           document.getElementById('super-admin-menu').classList.add('hidden');
           document.getElementById('admin-grup-menu').classList.remove('hidden');
-          buildSidebar(NAV_ADMIN);
-          roleBadge.textContent = 'ADMIN GRUP';
-          subtitle.textContent = 'Pantau status layanan dan kelola akun grup Anda.';
-          userBox.innerHTML = '<div class="w-8 h-8 rounded-full bg-[#624BFF]/20 text-[#C6C0FF] flex items-center justify-center text-xs font-bold shrink-0">AG</div><div class="min-w-0"><p class="text-white text-sm font-semibold truncate">' + (data.username || 'Admin Grup') + '</p><p class="text-white/50 text-[11px] truncate">' + (data.groupId || '') + '</p></div>';
           loadGroupStatus();
         }
       });
 
-    /* ---------- Terminal ---------- */
     socket.on('terminal_log', (msg) => {
       const div = document.createElement('div');
       div.textContent = msg;
@@ -356,7 +187,6 @@
       terminal.scrollTop = terminal.scrollHeight;
     });
 
-    /* ---------- Voucher ---------- */
     async function generateVoucher() {
       const durasi = document.getElementById('input-durasi').value || 30;
       const jumlah = document.getElementById('input-jumlah').value || 1;
@@ -372,12 +202,12 @@
 
         const resultDiv = document.getElementById('voucher-result');
         if (data.success) {
-          resultDiv.innerHTML = '✅ ' + data.message + '<br><code class="text-purple-400-sm">' + data.codes.join('<br>') + '</code>';
-          resultDiv.className = 'text-sm text-[#059669] mt-2';
+          resultDiv.innerHTML = '\u2705 ' + data.message + '<br><code class="text-purple-400-sm">' + data.codes.join('<br>') + '</code>';
+          resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('input-jumlah').value = 1;
         } else {
-          resultDiv.textContent = '❌ ' + data.message;
-          resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (error) {
         document.getElementById('voucher-result').textContent = 'Terjadi kesalahan jaringan!';
@@ -385,7 +215,6 @@
       }
     }
 
-    /* ---------- Akun Klien ---------- */
     async function generateAkun() {
       const userId = document.getElementById('input-uid').value.trim();
       const groupId = document.getElementById('input-gid').value.trim();
@@ -404,21 +233,20 @@
         const data = await res.json();
         const resultDiv = document.getElementById('akun-result');
         if (data.success) {
-          resultDiv.textContent = '✅ ' + data.message;
-          resultDiv.className = 'text-sm text-[#059669] mt-2';
+          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('input-uid').value = '';
           document.getElementById('input-gid').value = '';
           document.getElementById('input-pass').value = '';
         } else {
-          resultDiv.textContent = '❌ ' + data.message;
-          resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (err) {
         document.getElementById('akun-result').textContent = 'Gagal terhubung ke server.';
       }
     }
 
-    /* ---------- Redeem ---------- */
     async function redeemVoucher() {
       const kode = document.getElementById('kodeVoucher').value.trim();
       if (!kode) return alert('Masukkan kode voucher!');
@@ -432,19 +260,18 @@
         const data = await res.json();
         const resultDiv = document.getElementById('redeem-result');
         if (data.success) {
-          resultDiv.textContent = '✅ ' + data.message;
-          resultDiv.className = 'text-sm text-[#059669] mt-2';
+          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('kodeVoucher').value = '';
         } else {
-          resultDiv.textContent = '❌ ' + data.message;
-          resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (err) {
         document.getElementById('redeem-result').textContent = 'Gagal terhubung ke server.';
       }
     }
 
-    /* ---------- Cek Password ---------- */
     async function cekPasswordKlien() {
       const id = document.getElementById('input-cek-id').value.trim();
       if (!id) return alert('Masukkan ID terlebih dahulu!');
@@ -454,18 +281,17 @@
         const data = await res.json();
         const resultDiv = document.getElementById('cek-password-result');
         if (data.success) {
-          resultDiv.innerHTML = '✅ Password untuk <code class="text-amber-400">' + id + '</code>: <strong class="text-green-500">' + data.password + '</strong>';
-          resultDiv.className = 'text-sm text-[#059669] mt-2';
+          resultDiv.innerHTML = '\u2705 Password untuk <code class="text-amber-400">' + id + '</code>: <strong class="text-green-500">' + data.password + '</strong>';
+          resultDiv.className = 'text-sm text-green-400 mt-2';
         } else {
-          resultDiv.textContent = '❌ ' + data.message;
-          resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (err) {
         document.getElementById('cek-password-result').textContent = 'Gagal terhubung ke server.';
       }
     }
 
-    /* ---------- Kill Lisensi ---------- */
     async function killGrup() {
       const groupId = document.getElementById('input-kill-grup').value.trim();
       if (!groupId) return alert('Masukkan ID Grup!');
@@ -481,8 +307,8 @@
         const data = await res.json();
         const resultDiv = document.getElementById('kill-result');
         if (data.success) {
-          resultDiv.textContent = '✅ ' + data.message;
-          resultDiv.className = 'text-sm text-[#059669] mt-2';
+          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('input-kill-grup').value = '';
 
           const safeId = groupId.replace(/[^a-zA-Z0-9]/g, '_');
@@ -495,22 +321,21 @@
           }
           if (btnKill) {
             btnKill.innerText = 'OFF';
-            btnKill.className = 'px-3 py-1 rounded-full text-xs font-semibold transition duration-300 shrink-0 bg-[#EF4444]/10 text-[#EF4444] opacity-50 cursor-not-allowed';
+            btnKill.className = 'px-4 py-1 rounded font-bold transition duration-300 shrink-0 bg-red-500 hover:bg-red-600 text-white opacity-50 cursor-not-allowed';
             btnKill.disabled = true;
           }
           if (rowEl) {
             rowEl.classList.add('border-left-red');
           }
         } else {
-          resultDiv.textContent = '❌ ' + data.message;
-          resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+          resultDiv.textContent = '\u274C ' + data.message;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (err) {
         document.getElementById('kill-result').textContent = 'Gagal terhubung ke server.';
       }
     }
 
-    /* ---------- Broadcast ---------- */
     function kirimBroadcast() {
       const pesan = document.getElementById('broadcastText').value;
       if (!pesan.trim()) return alert('Pesan tidak boleh kosong!');
@@ -519,42 +344,40 @@
       if (konfirmasi) {
         socket.emit('send_broadcast', pesan);
         document.getElementById('broadcastText').value = '';
-        alert('Memulai pengiriman! Silakan pantau progresnya di Live Log Terminal.');
+        alert('Memulai pengiriman! Silakan pantau progresnya di Live Log Terminal di bawah.');
       }
     }
 
-    /* ---------- Stats table ---------- */
     socket.on('update_stats', (data) => {
       document.getElementById('total-users').innerText = data.total;
       const tbody = document.getElementById('user-table-body');
       if (data.total === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="px-5 py-6 text-center text-[#64748B]">Belum ada data pengguna</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-gray-500">Belum ada data pengguna</td></tr>';
       } else {
         tbody.innerHTML = data.users.map(u =>
-          '<tr class="border-b border-[#E2E8F0] hover:bg-[#F8FAFC] transition">' +
-            '<td class="px-5 py-3">' + u.no + '</td>' +
-            '<td class="px-5 py-3 font-mono text-sm">' + u.id + '</td>' +
-            '<td class="px-5 py-3">' + u.used + ' / ' + u.limit + '</td>' +
+          '<tr class="border-b border-gray-700 hover:bg-gray-700">' +
+            '<td class="px-4 py-3">' + u.no + '</td>' +
+            '<td class="px-4 py-3 font-mono text-sm">' + u.id + '</td>' +
+            '<td class="px-4 py-3">' + u.used + ' / ' + u.limit + '</td>' +
           '</tr>'
         ).join('');
       }
     });
 
-    /* ---------- Global toggles ---------- */
     socket.on('init_toggles', (toggles) => {
       const container = document.getElementById('toggle-container');
       container.innerHTML = '';
 
       for (const [feature, isEnabled] of Object.entries(toggles)) {
         const div = document.createElement('div');
-        div.className = 'flex justify-between items-center mb-3 bg-[#F8FAFC] p-3 rounded-md';
+        div.className = 'flex justify-between items-center mb-3 bg-gray-800 p-3 rounded';
 
         const label = document.createElement('span');
-        label.className = 'text-[#212B36] font-semibold uppercase text-sm';
+        label.className = 'text-white font-semibold uppercase text-sm';
         label.innerText = feature.replace(/_/g, ' ');
 
         const btn = document.createElement('button');
-        btn.className = 'pill ' + (isEnabled ? 'pill-on' : 'pill-off');
+        btn.className = 'px-4 py-1 rounded font-bold transition duration-300 ' + (isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
         btn.innerText = isEnabled ? 'ON' : 'OFF';
 
         btn.onclick = () => {
@@ -588,11 +411,11 @@
       div.className = 'flex justify-between items-center py-2';
 
       const label = document.createElement('span');
-      label.className = 'text-[#212B36] text-sm';
+      label.className = 'text-gray-300 text-sm';
       label.innerText = FEATURE_LABELS[feature] || feature.replace(/_/g, ' ');
 
       const btn = document.createElement('button');
-      btn.className = 'pill ' + (isEnabled ? 'pill-on' : 'pill-off');
+      btn.className = 'px-3 py-0.5 rounded text-xs font-bold transition duration-300 ' + (isEnabled ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
       btn.innerText = isEnabled ? 'ON' : 'OFF';
 
       btn.onclick = () => {
@@ -600,7 +423,7 @@
         const newState = !isEnabled;
         onToggle(feature, newState, () => {
           isEnabled = newState;
-          btn.className = 'pill ' + (newState ? 'pill-on' : 'pill-off');
+          btn.className = 'px-3 py-0.5 rounded text-xs font-bold transition duration-300 ' + (newState ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
           btn.innerText = newState ? 'ON' : 'OFF';
           btn.disabled = false;
         });
@@ -623,7 +446,6 @@
       }
     }
 
-    /* ---------- Grup ---------- */
     async function loadGroups() {
       const container = document.getElementById('group-container');
       try {
@@ -632,7 +454,7 @@
         const entries = Object.entries(groups);
 
         if (entries.length === 0) {
-          container.innerHTML = '<p class="text-sm text-[#64748B]">Belum ada grup yang terdeteksi.</p>';
+          container.innerHTML = '<p class="text-gray-500 text-sm">Belum ada grup yang terdeteksi.</p>';
           return;
         }
 
@@ -643,23 +465,24 @@
           let featuresExpanded = false;
 
           const card = document.createElement('div');
-          card.className = 'bg-white border border-[#E2E8F0] rounded-lg p-3 mb-3';
+          card.className = 'bg-gray-800 p-3 rounded mb-3';
           card.id = 'row-' + safeId;
 
           const header = document.createElement('div');
-          header.className = 'flex flex-wrap items-center gap-2';
+          header.className = 'flex justify-between items-center';
 
           const label = document.createElement('span');
-          label.className = 'text-[#212B36] font-semibold text-sm flex-1 min-w-0 truncate';
+          label.className = 'text-white font-semibold text-sm flex-1 truncate mr-2';
           label.innerText = data.name || groupId.split('@')[0];
 
           const badge = document.createElement('span');
-          badge.className = 'pill text-xs mr-1 ' + (data.verified ? 'pill-on' : 'pill-off');
+          badge.className = 'text-xs mr-2';
+          badge.className += data.verified ? ' text-green-400' : ' text-gray-400';
           badge.innerText = data.verified ? 'TERVERIFIKASI' : 'BELUM';
           badge.id = 'status-' + safeId;
 
           const btnToggle = document.createElement('button');
-          btnToggle.className = 'pill ' + (data.verified ? 'pill-on' : 'pill-off');
+          btnToggle.className = 'px-3 py-1 rounded text-xs font-bold transition duration-300 shrink-0 ' + (data.verified ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white');
           btnToggle.innerText = data.verified ? 'ON' : 'OFF';
           btnToggle.id = 'btn-kill-' + safeId;
 
@@ -682,22 +505,20 @@
           };
 
           const btnFeatures = document.createElement('button');
-          btnFeatures.className = 'px-3 py-1 rounded-full text-xs font-semibold transition duration-300 shrink-0 ml-auto bg-[#624BFF] hover:bg-[#4829E7] text-white';
+          btnFeatures.className = 'px-3 py-1 rounded text-xs font-bold transition duration-300 shrink-0 ml-2 bg-yellow-600 hover:bg-yellow-700 text-white';
           btnFeatures.innerText = '⚙️ Fitur';
           btnFeatures.type = 'button';
 
           const featuresPanel = document.createElement('div');
-          featuresPanel.className = 'mt-3 pt-3 border-t border-[#E2E8F0]';
+          featuresPanel.className = 'mt-3 pt-3 border-t border-gray-700';
           featuresPanel.style.display = 'none';
           featuresPanel.id = 'features-' + safeId;
 
           btnFeatures.onclick = () => {
             featuresExpanded = !featuresExpanded;
             featuresPanel.style.display = featuresExpanded ? 'block' : 'none';
-            btnFeatures.classList.toggle('bg-[#624BFF]');
-            btnFeatures.classList.toggle('bg-[#E2E8F0]');
-            btnFeatures.classList.toggle('text-white');
-            btnFeatures.classList.toggle('text-[#212B36]');
+            btnFeatures.classList.toggle('bg-yellow-600');
+            btnFeatures.classList.toggle('bg-gray-600');
             if (featuresExpanded && featuresPanel.children.length === 0) {
               const panelFeatures = { ...features };
               createFeaturesPanel('features-' + safeId, panelFeatures, async (updatedFeatures, done) => {
@@ -726,7 +547,7 @@
           container.appendChild(card);
         }
       } catch (err) {
-        container.innerHTML = '<p class="text-[#DC2626] text-sm">Gagal memuat daftar grup.</p>';
+        container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat daftar grup.</p>';
       }
     }
 
@@ -736,14 +557,14 @@
         const meRes = await fetch('/api/me');
         const me = await meRes.json();
         if (!me.groupId) {
-          container.innerHTML = '<p class="text-sm text-[#64748B]">ID grup tidak ditemukan pada akun Anda.</p>';
+          container.innerHTML = '<p class="text-gray-500 text-sm">ID grup tidak ditemukan pada akun Anda.</p>';
           return;
         }
 
         const res = await fetch('/api/groups/features/' + encodeURIComponent(me.groupId));
         const data = await res.json();
         if (!data.success) {
-          container.innerHTML = '<p class="text-[#DC2626] text-sm">Gagal memuat pengaturan fitur.</p>';
+          container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat pengaturan fitur.</p>';
           return;
         }
 
@@ -764,24 +585,23 @@
           container.appendChild(toggle);
         }
       } catch (err) {
-        container.innerHTML = '<p class="text-[#DC2626] text-sm">Gagal memuat pengaturan fitur.</p>';
+        container.innerHTML = '<p class="text-red-400 text-sm">Gagal memuat pengaturan fitur.</p>';
       }
     }
 
-    /* ---------- RPG ---------- */
     async function suntikXP() {
       const jid = document.getElementById('suntik-jid').value.trim();
       const xp = document.getElementById('suntik-xp').value.trim();
       const resultDiv = document.getElementById('suntik-result');
 
       if (!jid || !xp) {
-        resultDiv.innerText = '⚠️ JID dan XP wajib diisi!';
-        resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+        resultDiv.innerText = '\u26A0\uFE0F JID dan XP wajib diisi!';
+        resultDiv.className = 'text-sm text-red-400 mt-2';
         return;
       }
 
-      resultDiv.innerText = '⏳ Memproses...';
-      resultDiv.className = 'text-sm text-[#D97706] mt-2';
+      resultDiv.innerText = '\u23F3 Memproses...';
+      resultDiv.className = 'text-sm text-yellow-400 mt-2';
 
       try {
         const res = await fetch('/api/rpg/suntik', {
@@ -792,17 +612,17 @@
         const result = await res.json();
 
         if (result.success) {
-          resultDiv.innerText = '✅ Berhasil menyuntikkan XP! Jabatan target sekarang: ' + result.data.pangkat;
-          resultDiv.className = 'text-sm text-[#059669] mt-2';
+          resultDiv.innerText = '\u2705 Berhasil menyuntikkan XP! Jabatan target sekarang: ' + result.data.pangkat;
+          resultDiv.className = 'text-sm text-green-400 mt-2';
           document.getElementById('suntik-jid').value = '';
           document.getElementById('suntik-xp').value = '';
         } else {
-          resultDiv.innerText = '❌ Gagal: ' + result.error;
-          resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+          resultDiv.innerText = '\u274C Gagal: ' + result.error;
+          resultDiv.className = 'text-sm text-red-400 mt-2';
         }
       } catch (err) {
-        resultDiv.innerText = '❌ Gagal terhubung ke server.';
-        resultDiv.className = 'text-sm text-[#DC2626] mt-2';
+        resultDiv.innerText = '\u274C Gagal terhubung ke server.';
+        resultDiv.className = 'text-sm text-red-400 mt-2';
       }
     }
 
@@ -812,7 +632,7 @@
 
       if (!jid) return alert('Masukkan nomor WhatsApp dulu!');
 
-      resultDiv.innerHTML = '<span class="text-warning">Mencari data keanggotaan grup... 🔍</span>';
+      resultDiv.innerHTML = '<span class="text-warning">Mencari data keanggotaan grup... \uD83D\uDD0D</span>';
 
       try {
         const response = await fetch('/api/rpg/cek-user', {
@@ -824,10 +644,10 @@
 
         if (data.success) {
           if (data.groups.length > 0) {
-            resultDiv.innerHTML = '<span class="text-cyan-400">✅ Ditemukan di ' + data.groups.length + ' Grup:</span><br>' +
+            resultDiv.innerHTML = '<span class="text-cyan-400">\u2705 Ditemukan di ' + data.groups.length + ' Grup:</span><br>' +
               '<ul class="text-white-list"><li>' + data.groups.join('</li><li>') + '</li></ul>';
           } else {
-            resultDiv.innerHTML = '<span class="text-pink-500">⚠️ User tidak ditemukan di grup manapun yang memiliki bot ini.</span>';
+            resultDiv.innerHTML = '<span class="text-pink-500">\u26A0\uFE0F User tidak ditemukan di grup manapun yang memiliki bot ini.</span>';
           }
         } else {
           resultDiv.innerHTML = '<span class="text-error">Error: ' + data.error + '</span>';
@@ -845,5 +665,8 @@
         }
       });
   </script>
+  <footer class="footer">
+    <p>&copy; RyzarsAI | Version V.0.5.9</p>
+  </footer>
 </body>
 </html>
