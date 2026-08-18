@@ -1,18 +1,14 @@
 import http from 'http';
 import express from 'express';
 import session from 'express-session';
-import multer from 'multer';
 import { Server } from 'socket.io';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
-import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import logger from '../utils/logger.js';
 import { limiters } from '../middlewares/rateLimiter.js';
 import { getGroupsDB, toggleGroupVerification, getGroupFeatures, setGroupFeatures, DEFAULT_FEATURES } from '../core/groupManager.js';
 import { getRpgDB, suntikXP } from '../features/rpg.js';
-import { getChatSummary, getChatHistory, deleteChatHistory, getDbStats } from '../ai/geminiClient.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -236,124 +232,6 @@ app.post('/api/kill-grup', express.json(), requireLogin, (req, res) => {
     }
 });
 
-app.get('/api/chat/history', requireLogin, (req, res) => {
-  if (req.session.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
-  }
-  res.json({ success: true, chats: getChatSummary() });
-});
-
-app.get('/api/chat/history/:chatId', requireLogin, (req, res) => {
-  if (req.session.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
-  }
-  const { chatId } = req.params;
-  res.json({ success: true, messages: getChatHistory(chatId) });
-});
-
-app.delete('/api/chat/history/:chatId', requireLogin, (req, res) => {
-  if (req.session.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
-  }
-  const { chatId } = req.params;
-  const deleted = deleteChatHistory(chatId);
-  res.json({ success: true, deleted, message: `Riwayat ${chatId} berhasil dihapus (${deleted} pesan).` });
-});
-
-app.get('/api/db/info', requireLogin, (req, res) => {
-  if (req.session.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
-  }
-  res.json({ success: true, db: getDbStats() });
-});
-
-const dbUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const isDb = file.originalname.toLowerCase().endsWith('.db') || file.mimetype === 'application/vnd.sqlite3';
-    if (isDb) {
-      cb(null, true);
-    } else {
-      cb(new Error('Hanya file .db yang diperbolehkan!'));
-    }
-  },
-});
-
-app.post('/api/db/upload', requireLogin, dbUpload.single('file'), async (req, res) => {
-  if (req.session.role !== 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Akses Ditolak! Hanya Super Admin.' });
-  }
-
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: 'File .db wajib diunggah!' });
-  }
-
-  const buffer = req.file.buffer;
-  if (buffer.toString('utf8', 0, 16) !== 'SQLite format 3\u0000') {
-    return res.status(400).json({ success: false, message: 'File bukan database SQLite yang valid!' });
-  }
-
-  const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const tempPath = path.join(os.tmpdir(), `upload_${Date.now()}_${safeName}`);
-  let tempDb = null;
-
-  try {
-    fs.writeFileSync(tempPath, buffer);
-    tempDb = new Database(tempPath, { readonly: true, fileMustExist: true });
-
-    const tables = tempDb
-      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`)
-      .all()
-      .map((t) => t.name);
-
-    const hasChat = tables.includes('chat_history');
-    let chats = [];
-    let totalMessages = 0;
-
-    if (hasChat) {
-      const sessions = tempDb
-        .prepare(`SELECT chat_id, COUNT(*) AS total FROM chat_history GROUP BY chat_id ORDER BY MAX(id) DESC`)
-        .all();
-
-      for (const s of sessions) {
-        const messages = tempDb
-          .prepare(
-            `SELECT id, chat_id, role, message, timestamp
-             FROM chat_history
-             WHERE chat_id = ?
-             ORDER BY timestamp ASC`
-          )
-          .all(s.chat_id);
-        totalMessages += messages.length;
-        chats.push({
-          chat_id: s.chat_id,
-          total: messages.length,
-          messages,
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      fileName: req.file.originalname,
-      size: buffer.length,
-      tables,
-      hasChat,
-      totalMessages,
-      chats,
-    });
-  } catch (err) {
-    logger.error({ err }, 'Gagal membaca file .db yang diupload');
-    res.status(500).json({ success: false, message: 'Gagal membaca file .db: ' + err.message });
-  } finally {
-    if (tempDb) tempDb.close();
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {}
-  }
-});
-
 app.get('/dashboard', requireLogin, (req, res) => {
   const uptime = process.uptime();
   const hours = Math.floor(uptime / 3600);
@@ -542,17 +420,6 @@ app.post('/api/rpg/cek-user', express.json(), requireLogin, async (req, res) => 
     logger.error({ err: error }, 'Gagal cek user RPG');
     res.status(500).json({ error: 'Gagal mengecek data grup user' });
   }
-});
-
-app.use((err, req, res, next) => {
-  if (err && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ success: false, message: 'Ukuran file melebihi batas maksimal (25MB)!' });
-  }
-  if (err && err.message === 'Hanya file .db yang diperbolehkan!') {
-    return res.status(400).json({ success: false, message: err.message });
-  }
-  logger.error({ err }, 'Error pada endpoint dashboard');
-  res.status(500).json({ success: false, message: err.message || 'Terjadi kesalahan server' });
 });
 
 let dashboardSock = null;
