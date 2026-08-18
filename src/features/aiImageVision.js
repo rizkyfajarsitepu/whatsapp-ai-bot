@@ -1,7 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { downloadMedia } from '../utils/mediaHelper.js';
 import { config } from '../config/settings.js';
-import { uploadMediaAuto } from '../utils/googleDrive.js';
 import logger from '../utils/logger.js';
 
 let genAI = null;
@@ -52,7 +51,6 @@ export async function handleProactiveVision(sock, msg, caption = '') {
 
     const reply = response.text || 'Maaf, saya tidak bisa menganalisis gambar ini.';
     await sock.sendMessage(chatId, { text: reply });
-    await uploadMediaAuto(buffer, `foto_${Date.now()}.jpg`, mimeType);
     logger.info({ jid: chatId, sender: senderName }, 'Vision analysis terkirim');
   } catch (err) {
     logger.error({ jid: chatId, err: err.message }, 'Error vision analysis');
