@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { config } from '../config/settings.js';
 import { downloadMedia, getQuotedMessage, getMediaType } from '../utils/mediaHelper.js';
+import { uploadMediaAuto } from '../utils/googleDrive.js';
 
 let genAI = null;
 
@@ -35,6 +36,8 @@ export async function handleSTT(sock, msg) {
 
   try {
     const audioBuffer = await downloadMedia(sock, targetMsg);
+
+    await uploadMediaAuto(audioBuffer, `voice_${Date.now()}.ogg`, 'audio/ogg');
 
     const audioPart = {
       inlineData: {

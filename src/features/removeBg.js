@@ -2,6 +2,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { downloadMedia, getQuotedMessage, getMediaType } from '../utils/mediaHelper.js';
 import { config } from '../config/settings.js';
+import { uploadMediaAuto } from '../utils/googleDrive.js';
 
 export async function handleRemoveBg(sock, msg) {
   const chatId = msg.key.remoteJid;
@@ -67,6 +68,8 @@ export async function handleRemoveBg(sock, msg) {
       mimetype: 'image/png',
       caption: 'Background berhasil dihapus!',
     });
+
+    await uploadMediaAuto(resultBuffer, `hapusbg_${Date.now()}.png`, 'image/png');
 
     console.log(`📤 [RemoveBg] Hasil terkirim ke ${chatId}`);
   } catch (err) {

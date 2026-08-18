@@ -82,7 +82,48 @@ export function normalizeFolderId(folderId) {
   return str;
 }
 
-export async function uploadToDrive(fileBuffer, fileName, mimeType = 'application/octet-stream', folderId = config.GOOGLE_DRIVE_FOLDER_ID) {
+const MEDIA_TYPE_FOLDER_MAP = {
+  photo: 'GDRIVE_FOLDER_PHOTOS',
+  video: 'GDRIVE_FOLDER_VIDEOS',
+  audio: 'GDRIVE_FOLDER_AUDIO',
+  doc: 'GDRIVE_FOLDER_DOCS',
+};
+
+const MEDIA_CATEGORY_ALIASES = {
+  photo: ['photo', 'photos', 'image', 'images', 'gambar', 'foto', 'sticker', 'stiker', 'png', 'jpg', 'jpeg', 'webp'],
+  video: ['video', 'videos', 'mp4', 'mkv', 'webm', 'mov'],
+  audio: ['audio', 'audios', 'voice', 'voice_note', 'ptt', 'mp3', 'ogg', 'mpeg', 'wav', 'm4a', 'opus'],
+  doc: ['doc', 'docs', 'document', 'documents', 'pdf', 'zip', 'rar', '7z', 'txt', 'archive'],
+};
+
+function getMediaCategory(input) {
+  const value = String(input || '').toLowerCase();
+  if (!value) return null;
+
+  for (const [category, aliases] of Object.entries(MEDIA_CATEGORY_ALIASES)) {
+    if (aliases.includes(value)) return category;
+  }
+
+  if (value.startsWith('image/')) return 'photo';
+  if (value.startsWith('video/')) return 'video';
+  if (value.startsWith('audio/')) return 'audio';
+  if (value.startsWith('application/') || value.startsWith('text/') || value.startsWith('font/')) return 'doc';
+
+  return null;
+}
+
+export function getFolderByMediaType(input) {
+  const category = getMediaCategory(input);
+
+  if (category && MEDIA_TYPE_FOLDER_MAP[category]) {
+    const specificFolder = normalizeFolderId(config[MEDIA_TYPE_FOLDER_MAP[category]]);
+    if (specificFolder) return specificFolder;
+  }
+
+  return normalizeFolderId(config.GOOGLE_DRIVE_FOLDER_ID);
+}
+
+export async function uploadToDrive(fileBuffer, fileName, mimeType = 'application/octet-stream', folderId = null) {
   const drive = initGoogleDrive();
   if (!drive) {
     logger.warn({ fileName }, 'Upload ke Google Drive dilewati (Drive tidak siap)');
@@ -90,7 +131,7 @@ export async function uploadToDrive(fileBuffer, fileName, mimeType = 'applicatio
   }
 
   const fileMetadata = { name: fileName };
-  const targetFolder = normalizeFolderId(folderId);
+  const targetFolder = normalizeFolderId(folderId) || getFolderByMediaType(mimeType);
   if (targetFolder) fileMetadata.parents = [targetFolder];
 
   try {
@@ -115,7 +156,7 @@ export async function uploadToDrive(fileBuffer, fileName, mimeType = 'applicatio
   }
 }
 
-export async function uploadFileFromPath(filePath, fileName, mimeType = 'application/octet-stream', folderId = config.GOOGLE_DRIVE_FOLDER_ID, deleteAfter = false) {
+export async function uploadFileFromPath(filePath, fileName, mimeType = 'application/octet-stream', folderId = null, deleteAfter = false) {
   if (!fs.existsSync(filePath)) {
     logger.warn({ filePath }, 'File tidak ditemukan, upload dilewati');
     return null;
@@ -141,6 +182,15 @@ export function cleanupLocalFile(filePath) {
     }
   } catch (err) {
     logger.warn({ err, filePath }, 'Gagal menghapus file lokal');
+  }
+}
+
+export async function uploadMediaAuto(fileBuffer, fileName, mimeType = 'application/octet-stream') {
+  try {
+    return await uploadToDrive(fileBuffer, fileName, mimeType);
+  } catch (err) {
+    logger.error({ err, fileName }, 'Gagal upload media ke Google Drive (non-blokir)');
+    return null;
   }
 }
 

@@ -1,6 +1,7 @@
 import googleTts from 'google-tts-api';
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough, Readable } from 'stream';
+import { uploadMediaAuto } from '../utils/googleDrive.js';
 
 function bufferToStream(buffer) {
   const stream = new Readable();
@@ -67,6 +68,8 @@ export async function handleTTS(sock, msg, args) {
       mimetype: 'audio/ogg; codecs=opus',
       ptt: true,
     }, { quoted: msg });
+
+    await uploadMediaAuto(oggBuffer, `tts_${Date.now()}.ogg`, 'audio/ogg; codecs=opus');
 
     console.log(`📤 [TTS] Voice note terkirim ke ${targetJid}`);
   } catch (err) {

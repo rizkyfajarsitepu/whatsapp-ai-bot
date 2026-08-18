@@ -1,5 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 import { downloadMedia, getQuotedMessage, getMediaType } from '../utils/mediaHelper.js';
+import { uploadMediaAuto } from '../utils/googleDrive.js';
 
 export async function handleImageToPdf(sock, msg) {
   const chatId = msg.key.remoteJid;
@@ -56,6 +57,8 @@ export async function handleImageToPdf(sock, msg) {
       mimetype: 'application/pdf',
       caption: 'Gambar berhasil dikonversi ke PDF!',
     });
+
+    await uploadMediaAuto(pdfBuffer, fileName, 'application/pdf');
 
     console.log(`📤 [ImageToPdf] PDF terkirim ke ${chatId}`);
   } catch (err) {
