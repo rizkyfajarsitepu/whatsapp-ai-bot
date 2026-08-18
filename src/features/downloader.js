@@ -87,20 +87,27 @@ function getPlatformLabel(url) {
 
 function buildYtdlpArgs() {
   return [
+    '--force-ipv4',
     '--no-warnings',
     '--no-playlist',
-    '--concurrent-fragments', '4',
-    '--extractor-args', 'youtube:player_client=android,web',
+    '--socket-timeout', '20',
+    '--retries', '3',
+    '--extractor-args', 'youtube:player_client=android',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
   ];
 }
 
 async function downloadWithYtdlp(url, outputPath) {
   const args = [
-    ...buildYtdlpArgs(),
-    '--remux-video', 'mp4',
+    '--force-ipv4',
+    '--no-warnings',
+    '--no-playlist',
+    '--socket-timeout', '20',
+    '--retries', '3',
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    '--extractor-args', 'youtube:player_client=android',
+    '-f', 'b[ext=mp4][height<=720]/best[ext=mp4][height<=720]/bv*[height<=720]+ba/b',
     '--merge-output-format', 'mp4',
-    '-f', 'b[ext=mp4][height<=720]/bv*[height<=720][ext=mp4]+ba[ext=m4a]/b',
     '-o', outputPath,
     url,
   ];
