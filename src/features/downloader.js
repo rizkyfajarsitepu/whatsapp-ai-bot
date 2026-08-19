@@ -96,7 +96,7 @@ function buildYtdlpBaseArgs() {
     '--no-playlist',
     '--socket-timeout', '30',
     '--retries', '3',
-    '--user-agent', USER_AGENT,
+    '--extractor-args', 'youtube:player_client=android_creator,ios;player_skip=configs,webpage',
   ];
 }
 
@@ -110,7 +110,7 @@ async function getMediaInfo(url) {
 async function downloadWithYtdlp(url, outputPath) {
   const ytdlpArgs = [
     ...buildYtdlpBaseArgs(),
-    '-f', 'best[ext=mp4][height<=720]/best[height<=720]/best',
+    '-f', 'b[ext=mp4][height<=720]/best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best',
     '--merge-output-format', 'mp4',
     '-o', outputPath,
     url,
