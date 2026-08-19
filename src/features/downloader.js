@@ -1,30 +1,131 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import axios from 'axios';
-import { uploadToDrive } from '../utils/googleDrive.js';
+import logger from '../utils/logger.js';
+import { config } from '../config/settings.js';
+import { uploadToDrive, normalizeFolderId } from '../utils/googleDrive.js';
 import { getWIBTimestamp } from '../utils/dateTime.js';
 
-const execFileAsync = promisify(execFile);
-
-const YTDLP_PATH = 'yt-dlp';
-const TEMP_DIR = path.join(os.tmpdir(), 'bot-downloads');
+const YTDLP_PATH = process.env.YTDLP_PATH || 'yt-dlp';
+const TEMP_DIR = path.join(process.cwd(), 'tmp');
+const MAX_DURATION_SECONDS = 600;
+const MAX_SEND_ATTEMPTS = 2;
+const WHATSAPP_DOC_LIMIT_MB = 45;
+const WHATSAPP_ABSOLUTE_LIMIT_MB = 100;
 
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
 function cleanupFile(filePath) {
   try {
-    if (fs.existsSync(filePath)) {
+    if (filePath && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
+      logger.info({ filePath }, 'File temporer dihapus');
     }
-  } catch {}
+  } catch (err) {
+    logger.warn({ err, filePath }, 'Gagal menghapus file temporer');
+  }
 }
 
-const MAX_SEND_ATTEMPTS = 2;
+function runSpawn(command, args, { timeoutMs = 300000, onLog } = {}) {
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+
+    let child;
+    try {
+      child = spawn(command, args, { windowsHide: true });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill('SIGKILL');
+      } catch {}
+      reject(new Error('Proses melebihi batas waktu.'));
+    }, timeoutMs);
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk;
+      onLog?.(chunk);
+    });
+
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk;
+      onLog?.(chunk);
+    });
+
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      if (timedOut) return;
+
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+
+      const reason = signal
+        ? `Proses dihentikan oleh sistem (${signal})`
+        : stderr.trim() || `Keluar dengan kode ${code}`;
+      const err = new Error(reason);
+      err.stderr = stderr;
+      err.code = code;
+      reject(err);
+    });
+  });
+}
+
+function buildYtdlpBaseArgs() {
+  return [
+    '--force-ipv4',
+    '--no-warnings',
+    '--no-playlist',
+    '--socket-timeout', '30',
+    '--retries', '3',
+    '--user-agent', USER_AGENT,
+  ];
+}
+
+async function getMediaInfo(url) {
+  const args = [...buildYtdlpBaseArgs(), '--dump-json', url];
+  const { stdout } = await runSpawn(YTDLP_PATH, args, { timeoutMs: 20000 });
+  const lastLine = stdout.trim().split('\n').pop();
+  return JSON.parse(lastLine);
+}
+
+async function downloadWithYtdlp(url, outputPath) {
+  const ytdlpArgs = [
+    ...buildYtdlpBaseArgs(),
+    '-f', 'best[ext=mp4][height<=720]/best[height<=720]/best',
+    '--merge-output-format', 'mp4',
+    '-o', outputPath,
+    url,
+  ];
+
+  const start = Date.now();
+  await runSpawn(YTDLP_PATH, ytdlpArgs, {
+    timeoutMs: 300000,
+    onLog: (chunk) => {
+      const line = String(chunk).trim();
+      if (line && line.includes('[download]')) logger.debug({ line }, 'yt-dlp progress');
+    },
+  });
+  logger.info({ seconds: ((Date.now() - start) / 1000).toFixed(1) }, 'Download selesai');
+}
 
 async function sendMediaWithRetry(sock, chatId, content, msg) {
   const sendOptions = {
@@ -39,7 +140,7 @@ async function sendMediaWithRetry(sock, chatId, content, msg) {
       return;
     } catch (err) {
       lastErr = err;
-      console.warn(`[Downloader] Kirim media gagal (percobaan ${attempt}/${MAX_SEND_ATTEMPTS}): ${err.message}`);
+      logger.warn({ attempt, err: err.message }, 'Kirim media gagal');
       if (attempt < MAX_SEND_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 2000));
       }
@@ -52,21 +153,30 @@ async function sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg) {
   const fileSizeMB = fileBuffer.length / (1024 * 1024);
   const caption = `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`;
 
-  if (fileSizeMB > 100) {
-    await uploadMediaToDrive(fileBuffer, `${fileName}.mp4`, 'video/mp4');
-    await sock.sendMessage(chatId, {
-      text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
-    }, { quoted: msg });
+  if (fileSizeMB > WHATSAPP_ABSOLUTE_LIMIT_MB) {
+    await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
+    await sock.sendMessage(
+      chatId,
+      {
+        text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
+      },
+      { quoted: msg }
+    );
     return { status: 'skipped' };
   }
 
-  if (fileSizeMB > 45) {
-    await sendMediaWithRetry(sock, chatId, {
-      document: fileBuffer,
-      fileName: `${fileName}.mp4`,
-      mimetype: 'video/mp4',
-      caption: `${caption}\n\n*(Dikirim sebagai dokumen karena ukuran file > 45MB)*`,
-    }, msg);
+  if (fileSizeMB > WHATSAPP_DOC_LIMIT_MB) {
+    await sendMediaWithRetry(
+      sock,
+      chatId,
+      {
+        document: fileBuffer,
+        fileName,
+        mimetype: 'video/mp4',
+        caption: `${caption}\n\n*(Dikirim sebagai dokumen karena ukuran file > 45MB)*`,
+      },
+      msg
+    );
     return { status: 'sent' };
   }
 
@@ -77,27 +187,32 @@ async function sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg) {
       caption,
     }, msg);
   } catch (uploadErr) {
-    console.warn('[Downloader] Gagal kirim sebagai video, mencoba kirim sebagai dokumen...', uploadErr.message);
-    await sendMediaWithRetry(sock, chatId, {
-      document: fileBuffer,
-      fileName: `${fileName}.mp4`,
-      mimetype: 'video/mp4',
-      caption: `${caption}\n\n*(Dikirim sebagai file dokumen)*`,
-    }, msg);
+    logger.warn({ err: uploadErr.message }, 'Gagal kirim sebagai video, fallback ke dokumen');
+    await sendMediaWithRetry(
+      sock,
+      chatId,
+      {
+        document: fileBuffer,
+        fileName,
+        mimetype: 'video/mp4',
+        caption: `${caption}\n\n*(Dikirim sebagai file dokumen)*`,
+      },
+      msg
+    );
   }
 
   return { status: 'sent' };
 }
 
-async function uploadMediaToDrive(fileBuffer, baseName, mimeType) {
+async function uploadMediaToDrive(fileBuffer, fileName, mimeType) {
+  const videoFolderId = normalizeFolderId(config.GDRIVE_FOLDER_VIDEOS) || normalizeFolderId(config.GOOGLE_DRIVE_FOLDER_ID);
   try {
-    const fileName = `${baseName.replace(/[^\w\- .]+/g, '_').slice(0, 80)}`;
-    const fileData = await uploadToDrive(fileBuffer, fileName, mimeType);
+    const fileData = await uploadToDrive(fileBuffer, fileName, mimeType, videoFolderId);
     if (fileData) {
-      console.log(`☁️ [Downloader] Media disimpan ke Google Drive: ${fileName}`);
+      logger.info({ name: fileName, id: fileData.id }, 'Media disimpan ke Google Drive');
     }
   } catch (err) {
-    console.error('[Downloader] Gagal upload media ke Google Drive:', err.message);
+    logger.error({ err, fileName }, 'Gagal upload media ke Google Drive');
   }
 }
 
@@ -117,13 +232,47 @@ function isFacebookUrl(url) {
   return /facebook\.com|fb\.watch/i.test(url);
 }
 
+function isSupportedUrl(url) {
+  return isYouTubeUrl(url) || isTikTokUrl(url) || isInstagramUrl(url) || isFacebookUrl(url);
+}
+
+function getPlatformLabel(url) {
+  if (isTikTokUrl(url)) return 'TikTok';
+  if (isYouTubeUrl(url)) return 'YouTube';
+  if (isInstagramUrl(url)) return 'Instagram';
+  if (isFacebookUrl(url)) return 'Facebook';
+  return 'Media';
+}
+
+function buildFriendlyError(err) {
+  const combined = `${err?.message || ''}\n${err?.stderr || ''}`;
+
+  if (/private|unavailable|not.?available|not found|removed|missing/i.test(combined)) {
+    return 'Video tidak ditemukan atau bersifat privat. Periksa kembali link-nya.';
+  }
+  if (/age.?restricted|18\+|nswf/i.test(combined)) {
+    return 'Video memiliki batasan usia sehingga tidak bisa diunduh.';
+  }
+  if (/sign in|login|log in|authenticat/i.test(combined)) {
+    return 'Video membutuhkan login sehingga tidak bisa diunduh.';
+  }
+  if (/403|forbidden/i.test(combined)) {
+    return 'Akses ditolak (403). Coba perbarui yt-dlp: pip install -U yt-dlp';
+  }
+  if (/network|timed? ?out|unreachable|socket/i.test(combined)) {
+    return 'Jaringan bermasalah. Periksa kembali koneksi internet kamu.';
+  }
+  if (/not a valid url|unsupported url/i.test(combined)) {
+    return 'Link tidak valid atau tidak didukung.';
+  }
+  return null;
+}
+
 async function downloadTikTok(url) {
   const { data } = await axios.get('https://tikwm.com/api/', {
     params: { url, hd: 1 },
     timeout: 30000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-    },
+    headers: { 'User-Agent': USER_AGENT },
   });
 
   if (data?.code !== 0 || !data?.data?.play) {
@@ -138,124 +287,99 @@ async function downloadTikTok(url) {
   };
 }
 
-function isSupportedUrl(url) {
-  return isYouTubeUrl(url) || isTikTokUrl(url) || isInstagramUrl(url) || isFacebookUrl(url);
-}
-
-function getPlatformLabel(url) {
-  if (isTikTokUrl(url)) return 'TikTok';
-  if (isYouTubeUrl(url)) return 'YouTube';
-  if (isInstagramUrl(url)) return 'Instagram';
-  if (isFacebookUrl(url)) return 'Facebook';
-  return 'Media';
-}
-
-function buildYtdlpArgs() {
-  return [
-    '--force-ipv4',
-    '--no-warnings',
-    '--no-playlist',
-    '--socket-timeout', '20',
-    '--retries', '3',
-    '--extractor-args', 'youtube:player_client=android',
-    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  ];
-}
-
-async function downloadWithYtdlp(url, outputPath) {
-  const args = [
-    '--force-ipv4',
-    '--no-warnings',
-    '--no-playlist',
-    '--socket-timeout', '20',
-    '--retries', '3',
-    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-    '--extractor-args', 'youtube:player_client=android',
-    '--max-filesize', '70M',
-    '-f', 'bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[ext=mp4][height<=720]/b',
-    '--merge-output-format', 'mp4',
-    '-o', outputPath,
-    url,
-  ];
-
-  const start = Date.now();
-  const { stderr } = await execFileAsync(YTDLP_PATH, args, {
-    timeout: 240000,
-    maxBuffer: 50 * 1024 * 1024,
+async function downloadDirectVideo(url, outputPath) {
+  const videoResp = await axios.get(url, {
+    responseType: 'stream',
+    timeout: 120000,
+    headers: { 'User-Agent': USER_AGENT },
   });
-  console.log(`[Downloader] yt-dlp selesai dalam ${((Date.now() - start) / 1000).toFixed(1)}s\n${stderr || ''}`);
-}
 
-async function getInfoWithYtdlp(url) {
-  const args = [
-    ...buildYtdlpArgs(),
-    '--dump-json',
-    url,
-  ];
-
-  const start = Date.now();
-  const { stdout } = await execFileAsync(YTDLP_PATH, args, {
-    timeout: 20000,
-    maxBuffer: 10 * 1024 * 1024,
+  const writer = fs.createWriteStream(outputPath);
+  videoResp.data.pipe(writer);
+  await new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
   });
-  console.log(`[Downloader] Ekstraksi info selesai dalam ${((Date.now() - start) / 1000).toFixed(1)}s`);
-
-  return JSON.parse(stdout);
 }
 
 async function runYtdlpFlow(sock, chatId, url, msg) {
-  const timestamp = Date.now();
-  const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
-
-  let info;
-  try {
-    info = await getInfoWithYtdlp(url);
-  } catch {
-    info = null;
-  }
-
-  const title = info?.title || 'Video';
-  const duration = info?.duration;
-  const uploader = info?.uploader || info?.channel || 'Unknown';
-
-  if (duration && duration > 600) {
-    await sock.sendMessage(chatId, {
-      text: `Video terlalu panjang (${Math.floor(duration / 60)} menit). Batas maksimal 10 menit.`,
-    });
-    return { status: 'skipped' };
-  }
-
-  await sock.sendMessage(chatId, {
-    text: `Mengunduh: *${title}*\nCreator: ${uploader}\nHarap tunggu...`,
-  });
+  const { date, time } = getWIBTimestamp();
+  const platform = getPlatformLabel(url);
+  const fileName = `${platform}_${date}_${time}.mp4`;
+  const outputPath = path.join(TEMP_DIR, `${Date.now()}.mp4`);
 
   try {
+    let info = null;
+    try {
+      info = await getMediaInfo(url);
+    } catch (infoErr) {
+      const friendly = buildFriendlyError(infoErr);
+      await sock.sendMessage(
+        chatId,
+        { text: friendly || 'Gagal mengambil info video. Coba lagi nanti ya.' },
+        { quoted: msg }
+      );
+      return { status: 'skipped' };
+    }
+
+    const title = info?.title || 'Video';
+    const uploader = info?.uploader || info?.channel || 'Unknown';
+    const duration = Number(info?.duration) || 0;
+
+    if (duration > MAX_DURATION_SECONDS) {
+      await sock.sendMessage(
+        chatId,
+        { text: '⚠️ Durasi video terlalu panjang. Maksimal durasi adalah 10 menit.' },
+        { quoted: msg }
+      );
+      return { status: 'skipped' };
+    }
+
+    await sock.sendMessage(
+      chatId,
+      { text: `Mengunduh: *${title}*\nCreator: ${uploader}\nHarap tunggu...` },
+      { quoted: msg }
+    );
+
     await downloadWithYtdlp(url, outputPath);
 
     if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
       throw new Error('File hasil download kosong atau tidak ditemukan.');
     }
 
-    const fileBuffer = fs.readFileSync(outputPath);
-    const isAudio = info?.ext === 'mp3' || info?.acodec === 'none' || (info?.vcodec === 'none' && info?.acodec);
-    const { dateTime } = getWIBTimestamp();
-    const platform = getPlatformLabel(url);
+    const fileSizeMB = fs.statSync(outputPath).size / (1024 * 1024);
+    if (fileSizeMB > WHATSAPP_ABSOLUTE_LIMIT_MB) {
+      const fileBuffer = fs.readFileSync(outputPath);
+      await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
+      await sock.sendMessage(
+        chatId,
+        {
+          text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
+        },
+        { quoted: msg }
+      );
+      return { status: 'skipped' };
+    }
 
-    const sendStart = Date.now();
+    const fileBuffer = fs.readFileSync(outputPath);
+    const isAudio = info?.vcodec === 'none' && info?.acodec;
+
+    let sendResult;
     if (isAudio) {
       await sendMediaWithRetry(sock, chatId, {
         audio: fileBuffer,
         mimetype: 'audio/mpeg',
+        fileName: `${platform}_${date}_${time}.mp3`,
       }, msg);
-      await uploadMediaToDrive(fileBuffer, `Audio_${dateTime}.mp3`, 'audio/mpeg');
     } else {
-      const result = await sendVideoMedia(sock, chatId, fileBuffer, title, `${platform}_${dateTime}`, msg);
-      if (result?.status === 'skipped') {
-        return { status: 'skipped' };
-      }
-      await uploadMediaToDrive(fileBuffer, `${platform}_${dateTime}.mp4`, 'video/mp4');
+      sendResult = await sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg);
     }
-    console.log(`[Downloader] Media terkirim ke ${chatId} dalam ${((Date.now() - sendStart) / 1000).toFixed(1)}s: ${path.basename(outputPath)}`);
+
+    if (sendResult?.status !== 'skipped') {
+      await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
+    }
+
+    logger.info({ jid: chatId, fileName }, 'Media terkirim ke WhatsApp');
     return { status: 'sent' };
   } finally {
     cleanupFile(outputPath);
@@ -264,36 +388,38 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
 
 async function runTikTokApiFlow(sock, chatId, url, msg) {
   const tikInfo = await downloadTikTok(url);
-
-  await sock.sendMessage(chatId, {
-    text: `Mengunduh: *${tikInfo.title}*\nCreator: ${tikInfo.uploader}\nHarap tunggu...`,
-  });
-
-  const timestamp = Date.now();
-  const outputPath = path.join(TEMP_DIR, `${timestamp}.mp4`);
+  const { date, time } = getWIBTimestamp();
+  const fileName = `TikTok_${date}_${time}.mp4`;
+  const outputPath = path.join(TEMP_DIR, `${Date.now()}.mp4`);
 
   try {
-    const videoResp = await axios.get(tikInfo.videoUrl, {
-      responseType: 'stream',
-      timeout: 120000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
+    if (Number(tikInfo.duration) > MAX_DURATION_SECONDS) {
+      await sock.sendMessage(
+        chatId,
+        { text: '⚠️ Durasi video terlalu panjang. Maksimal durasi adalah 10 menit.' },
+        { quoted: msg }
+      );
+      return { status: 'skipped' };
+    }
 
-    const writer = fs.createWriteStream(outputPath);
-    videoResp.data.pipe(writer);
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
+    await sock.sendMessage(
+      chatId,
+      { text: `Mengunduh: *${tikInfo.title}*\nCreator: ${tikInfo.uploader}\nHarap tunggu...` },
+      { quoted: msg }
+    );
+
+    await downloadDirectVideo(tikInfo.videoUrl, outputPath);
+
+    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+      throw new Error('File hasil download kosong atau tidak ditemukan.');
+    }
 
     const fileBuffer = fs.readFileSync(outputPath);
-    const { dateTime } = getWIBTimestamp();
-    const sendResult = await sendVideoMedia(sock, chatId, fileBuffer, tikInfo.title, `TikTok_${dateTime}`, msg);
+    const sendResult = await sendVideoMedia(sock, chatId, fileBuffer, tikInfo.title, fileName, msg);
     if (sendResult?.status !== 'skipped') {
-      await uploadMediaToDrive(fileBuffer, `TikTok_${dateTime}.mp4`, 'video/mp4');
+      await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
     }
+    return { status: 'sent' };
   } finally {
     cleanupFile(outputPath);
   }
@@ -322,17 +448,17 @@ export async function handleDownloader(sock, msg, args) {
 
   if (isTikTokUrl(url)) {
     try {
-      await runTikTokApiFlow(sock, chatId, url, msg);
-      return;
+      const result = await runTikTokApiFlow(sock, chatId, url, msg);
+      if (result?.status === 'sent' || result?.status === 'skipped') return;
     } catch (tikErr) {
-      console.error('[Downloader] TikTok API Error:', tikErr.message);
+      logger.warn({ err: tikErr.message }, 'TikTok API gagal, fallback ke yt-dlp');
     }
 
     try {
       const result = await runYtdlpFlow(sock, chatId, url, msg);
       if (result?.status === 'sent' || result?.status === 'skipped') return;
     } catch (ytErr) {
-      console.error('[Downloader] yt-dlp TikTok gagal:', ytErr.message);
+      logger.error({ err: ytErr.message }, 'yt-dlp TikTok gagal');
     }
 
     await sock.sendMessage(chatId, {
@@ -344,13 +470,12 @@ export async function handleDownloader(sock, msg, args) {
   try {
     await runYtdlpFlow(sock, chatId, url, msg);
   } catch (err) {
-    console.error('[Downloader] Error:', err);
-    const hint =
-      err.message.includes('403') || err.message.includes('Forbidden')
-        ? '\n\nTips: perbarui yt-dlp dengan perintah: pip install -U yt-dlp'
-        : '';
+    logger.error({ err: err.message }, 'Gagal mengunduh media');
+    const friendly = buildFriendlyError(err);
     await sock.sendMessage(chatId, {
-      text: `Gagal mengunduh media. Error: ${err.message}${hint}`,
+      text: friendly
+        ? `Gagal mengunduh media.\n${friendly}`
+        : 'Gagal mengunduh media. Coba lagi nanti ya.',
     });
   }
 }
