@@ -101,33 +101,19 @@ function cleanUrl(rawUrl) {
   }
 }
 
-function buildYtdlpBaseArgs() {
-  return [
+async function downloadWithYtdlp(url, outputBasePath) {
+  const ytdlpArgs = [
     '--force-ipv4',
     '--no-warnings',
     '--no-playlist',
-    '--socket-timeout', '20',
-    '--retries', '3',
-    '--user-agent',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-    '--extractor-args', 'youtube:player_client=ios,web',
-  ];
-}
-
-async function getMediaInfo(url) {
-  const args = [...buildYtdlpBaseArgs(), '--dump-json', url];
-  const { stdout } = await runSpawn(YTDLP_PATH, args, { timeoutMs: 20000 });
-  const lastLine = stdout.trim().split('\n').pop();
-  return JSON.parse(lastLine);
-}
-
-async function downloadWithYtdlp(url, outputPath) {
-  const ytdlpArgs = [
-    ...buildYtdlpBaseArgs(),
+    '--socket-timeout', '60',
+    '--retries', '5',
+    '--match-filter', `duration <= ${MAX_DURATION_SECONDS}`,
+    '--extractor-args', 'youtube:player_client=mweb,android',
     '-f', 'best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best',
     '--merge-output-format', 'mp4',
-    '-o', outputPath,
-    url,
+    '-o', `${outputBasePath}_%(title).100B [%(id)s].%(ext)s`,
+    cleanUrl(url),
   ];
 
   const start = Date.now();
@@ -138,7 +124,27 @@ async function downloadWithYtdlp(url, outputPath) {
       if (line && line.includes('[download]')) logger.debug({ line }, 'yt-dlp progress');
     },
   });
-  logger.info({ seconds: ((Date.now() - start) / 1000).toFixed(1) }, 'Download selesai');
+
+  const baseName = path.basename(outputBasePath);
+  const candidates = fs
+    .readdirSync(TEMP_DIR)
+    .filter((f) => f.startsWith(`${baseName}_`) && f.endsWith('.mp4'));
+
+  if (candidates.length === 0) {
+    throw new Error('File hasil download tidak ditemukan.');
+  }
+
+  const filePath = path.join(TEMP_DIR, candidates[candidates.length - 1]);
+  const title = path
+    .basename(filePath)
+    .slice(baseName.length + 1)
+    .replace(/ \[[^\]]+\]\.mp4$/, '');
+
+  logger.info(
+    { seconds: ((Date.now() - start) / 1000).toFixed(1), filePath },
+    'Download selesai'
+  );
+  return { filePath, title };
 }
 
 async function sendMediaWithRetry(sock, chatId, content, msg) {
@@ -261,6 +267,9 @@ function getPlatformLabel(url) {
 function buildFriendlyError(err) {
   const combined = `${err?.message || ''}\n${err?.stderr || ''}`;
 
+  if (/duration.*(filter|matches)|filter.*duration|no video matches|did not match/i.test(combined)) {
+    return '⚠️ Durasi video melebihi batas maksimal (10 menit).';
+  }
   if (/private|unavailable|not.?available|not found|removed|missing/i.test(combined)) {
     return 'Video tidak ditemukan atau bersifat privat. Periksa kembali link-nya.';
   }
@@ -320,50 +329,27 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
   const { date, time } = getWIBTimestamp();
   const platform = getPlatformLabel(url);
   const fileName = `${platform}_${date}_${time}.mp4`;
-  const outputPath = path.join(TEMP_DIR, `${Date.now()}.mp4`);
+  const outputBasePath = path.join(TEMP_DIR, `${Date.now()}`);
 
+  await sock.sendMessage(
+    chatId,
+    { text: 'Mengunduh video. Harap tunggu...' },
+    { quoted: msg }
+  );
+
+  let filePath = null;
   try {
-    let info = null;
-    try {
-      info = await getMediaInfo(url);
-    } catch (infoErr) {
-      const friendly = buildFriendlyError(infoErr);
-      await sock.sendMessage(
-        chatId,
-        { text: friendly || 'Gagal mengambil info video. Coba lagi nanti ya.' },
-        { quoted: msg }
-      );
-      return { status: 'skipped' };
-    }
+    const result = await downloadWithYtdlp(url, outputBasePath);
+    filePath = result.filePath;
+    const title = result.title || 'Video';
 
-    const title = info?.title || 'Video';
-    const uploader = info?.uploader || info?.channel || 'Unknown';
-    const duration = Number(info?.duration) || 0;
-
-    if (duration > MAX_DURATION_SECONDS) {
-      await sock.sendMessage(
-        chatId,
-        { text: '⚠️ Durasi video terlalu panjang. Maksimal durasi adalah 10 menit.' },
-        { quoted: msg }
-      );
-      return { status: 'skipped' };
-    }
-
-    await sock.sendMessage(
-      chatId,
-      { text: `Mengunduh: *${title}*\nCreator: ${uploader}\nHarap tunggu...` },
-      { quoted: msg }
-    );
-
-    await downloadWithYtdlp(url, outputPath);
-
-    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
       throw new Error('File hasil download kosong atau tidak ditemukan.');
     }
 
-    const fileSizeMB = fs.statSync(outputPath).size / (1024 * 1024);
+    const fileSizeMB = fs.statSync(filePath).size / (1024 * 1024);
     if (fileSizeMB > WHATSAPP_ABSOLUTE_LIMIT_MB) {
-      const fileBuffer = fs.readFileSync(outputPath);
+      const fileBuffer = fs.readFileSync(filePath);
       await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
       await sock.sendMessage(
         chatId,
@@ -375,19 +361,8 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
       return { status: 'skipped' };
     }
 
-    const fileBuffer = fs.readFileSync(outputPath);
-    const isAudio = info?.vcodec === 'none' && info?.acodec;
-
-    let sendResult;
-    if (isAudio) {
-      await sendMediaWithRetry(sock, chatId, {
-        audio: fileBuffer,
-        mimetype: 'audio/mpeg',
-        fileName: `${platform}_${date}_${time}.mp3`,
-      }, msg);
-    } else {
-      sendResult = await sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg);
-    }
+    const fileBuffer = fs.readFileSync(filePath);
+    const sendResult = await sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg);
 
     if (sendResult?.status !== 'skipped') {
       await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
@@ -395,8 +370,15 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
 
     logger.info({ jid: chatId, fileName }, 'Media terkirim ke WhatsApp');
     return { status: 'sent' };
+  } catch (err) {
+    const friendly = buildFriendlyError(err);
+    if (friendly) {
+      await sock.sendMessage(chatId, { text: friendly }, { quoted: msg });
+      return { status: 'skipped' };
+    }
+    throw err;
   } finally {
-    cleanupFile(outputPath);
+    if (filePath) cleanupFile(filePath);
   }
 }
 
