@@ -338,72 +338,37 @@ async function downloadTikTokMeta(url) {
   };
 }
 
-function pickInstagramVideo(medias) {
-  if (!Array.isArray(medias)) return null;
-  const hit = medias.find(
-    (m) => m && m.url && /video/i.test(String(m.type || m.extension || ''))
-  );
-  return hit ? hit.url : null;
-}
-
-function parseInstagramApiResult(data) {
-  if (!data) return null;
-  const videoUrl = pickInstagramVideo(data?.medias || data?.media);
-  if (!videoUrl) return null;
-  return { videoUrl, title: data?.title || 'Instagram Video' };
-}
-
-function parseSnapInstaResult(data) {
-  if (!data || data?.status !== 'ok') return null;
-  const inner = data?.data || data;
-  const videoUrl = inner?.video || pickInstagramVideo(inner?.media);
-  if (!videoUrl) return null;
-  return { videoUrl, title: inner?.title || 'Instagram Video' };
-}
-
-async function scrapeInstagramDirect(url) {
-  const errors = [];
-
+async function downloadInstagram(url) {
   try {
-    const { data } = await axios.post(
-      'https://instasupersave.com/api/ig',
-      new URLSearchParams({ url }),
+    const clean = url.split('?')[0];
+
+    const response = await axios.post(
+      'https://api.cobalt.tools/api/json',
+      { url: clean, vQuality: '720' },
       {
-        timeout: 30000,
         headers: {
-          'User-Agent': USER_AGENT,
-          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0',
         },
+        timeout: 20000,
       }
     );
-    const result = parseInstagramApiResult(data);
-    if (result) return result;
-    errors.push('instasupersave: respons tanpa video');
-  } catch (err) {
-    errors.push(`instasupersave: ${err.message}`);
-  }
 
-  try {
-    const { data } = await axios.post(
-      'https://snapinsta.app/api/ajaxSearch?lang=id',
-      new URLSearchParams({ data: url }),
-      {
-        timeout: 30000,
-        headers: {
-          'User-Agent': USER_AGENT,
-          'X-Requested-With': 'XMLHttpRequest',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
+    if (response.data && response.data.url) {
+      return response.data.url;
+    }
+    throw new Error('Gagal mendapatkan stream url');
+  } catch (err) {
+    const backup = await axios.get(
+      `https://api.siputzx.my.id/api/d/igdl?url=${encodeURIComponent(url)}`,
+      { timeout: 20000 }
     );
-    const result = parseSnapInstaResult(data);
-    if (result) return result;
-    errors.push('snapinsta: respons tanpa video');
-  } catch (err) {
-    errors.push(`snapinsta: ${err.message}`);
+    if (backup.data?.data?.[0]?.url) {
+      return backup.data.data[0].url;
+    }
+    throw err;
   }
-
-  throw new Error(`Semua scraper Instagram gagal: ${errors.join('; ')}`);
 }
 
 async function downloadDirectStream(url, outputPath) {
@@ -425,16 +390,16 @@ async function downloadDirectStream(url, outputPath) {
 
 async function tryDownloadInstagram(url, outputBasePath) {
   try {
-    const direct = await scrapeInstagramDirect(url);
+    const videoUrl = await downloadInstagram(url);
     const outputPath = path.join(TEMP_DIR, `${path.basename(outputBasePath)}_ig.mp4`);
-    await downloadDirectStream(direct.videoUrl, outputPath);
+    await downloadDirectStream(videoUrl, outputPath);
 
     if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
       throw new Error('File hasil unduhan Instagram kosong.');
     }
 
     logger.info({ outputPath }, 'Instagram direct download selesai');
-    return { filePath: outputPath, title: direct.title || 'Instagram Video' };
+    return { filePath: outputPath, title: 'Instagram Video' };
   } catch (err) {
     logger.warn({ err: err.message }, 'Scraper Instagram gagal, fallback ke yt-dlp');
     return null;
