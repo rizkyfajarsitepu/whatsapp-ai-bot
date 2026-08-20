@@ -2,6 +2,8 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
+import igdl from '@sasmeee/igdl';
+import { instagramGetUrl } from 'instagram-url-direct';
 import logger from '../utils/logger.js';
 import { config } from '../config/settings.js';
 import { uploadToDrive, normalizeFolderId } from '../utils/googleDrive.js';
@@ -338,37 +340,28 @@ async function downloadTikTokMeta(url) {
   };
 }
 
-async function downloadInstagram(url) {
+async function getInstagramVideoUrl(url) {
+  const cleanUrl = url.split('?')[0];
+
   try {
-    const clean = url.split('?')[0];
-
-    const response = await axios.post(
-      'https://api.cobalt.tools/api/json',
-      { url: clean, vQuality: '720' },
-      {
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0',
-        },
-        timeout: 20000,
-      }
-    );
-
-    if (response.data && response.data.url) {
-      return response.data.url;
+    const data = await igdl(cleanUrl);
+    if (data && data.length > 0 && data[0].download_link) {
+      return data[0].download_link;
     }
-    throw new Error('Gagal mendapatkan stream url');
-  } catch (err) {
-    const backup = await axios.get(
-      `https://api.siputzx.my.id/api/d/igdl?url=${encodeURIComponent(url)}`,
-      { timeout: 20000 }
-    );
-    if (backup.data?.data?.[0]?.url) {
-      return backup.data.data[0].url;
-    }
-    throw err;
+  } catch (e) {
+    logger.debug({ err: e.message }, 'igdl gagal, lanjut ke instagram-url-direct');
   }
+
+  try {
+    const result = await instagramGetUrl(cleanUrl);
+    if (result?.url_list?.length > 0) {
+      return result.url_list[0];
+    }
+  } catch (e) {
+    logger.debug({ err: e.message }, 'instagram-url-direct gagal');
+  }
+
+  throw new Error('Gagal mengekstrak direct link video Instagram.');
 }
 
 async function downloadDirectStream(url, outputPath) {
@@ -390,7 +383,7 @@ async function downloadDirectStream(url, outputPath) {
 
 async function tryDownloadInstagram(url, outputBasePath) {
   try {
-    const videoUrl = await downloadInstagram(url);
+    const videoUrl = await getInstagramVideoUrl(url);
     const outputPath = path.join(TEMP_DIR, `${path.basename(outputBasePath)}_ig.mp4`);
     await downloadDirectStream(videoUrl, outputPath);
 
