@@ -201,18 +201,6 @@ async function sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg) {
   const fileSizeMB = fileBuffer.length / (1024 * 1024);
   const caption = `*${title}*\nUkuran: ${fileSizeMB.toFixed(1)} MB`;
 
-  if (fileSizeMB > WHATSAPP_ABSOLUTE_LIMIT_MB) {
-    await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
-    await sock.sendMessage(
-      chatId,
-      {
-        text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
-      },
-      { quoted: msg }
-    );
-    return { status: 'skipped' };
-  }
-
   if (fileSizeMB > WHATSAPP_DOC_LIMIT_MB) {
     await sendMediaWithRetry(
       sock,
@@ -252,16 +240,29 @@ async function sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg) {
   return { status: 'sent' };
 }
 
-async function uploadMediaToDrive(fileBuffer, fileName, mimeType) {
+function scheduleDriveBackup(fileBuffer, filePath, fileName, mimeType, sock, chatId, msg, notifyOnDone = false) {
   const videoFolderId = normalizeFolderId(config.GDRIVE_FOLDER_VIDEOS) || normalizeFolderId(config.GOOGLE_DRIVE_FOLDER_ID);
-  try {
-    const fileData = await uploadToDrive(fileBuffer, fileName, mimeType, videoFolderId);
-    if (fileData) {
-      logger.info({ name: fileName, id: fileData.id }, 'Media disimpan ke Google Drive');
-    }
-  } catch (err) {
-    logger.error({ err, fileName }, 'Gagal upload media ke Google Drive');
-  }
+  uploadToDrive(fileBuffer, fileName, mimeType, videoFolderId)
+    .then((res) => {
+      logger.info({ msg: 'Backup Drive berhasil', fileId: res?.id, fileName });
+      if (notifyOnDone && res?.id && sock && chatId) {
+        sock
+          .sendMessage(
+            chatId,
+            {
+              text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
+            },
+            { quoted: msg }
+          )
+          .catch(() => {});
+      }
+    })
+    .catch((err) => {
+      logger.error({ msg: 'Gagal backup Drive di background', err: err.message, fileName });
+    })
+    .finally(() => {
+      cleanupFile(filePath);
+    });
 }
 
 function isYouTubeUrl(url) {
@@ -483,37 +484,27 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
     }
 
     const fileSizeMB = fs.statSync(filePath).size / (1024 * 1024);
+    const fileBuffer = fs.readFileSync(filePath);
+
     if (fileSizeMB > WHATSAPP_ABSOLUTE_LIMIT_MB) {
-      const fileBuffer = fs.readFileSync(filePath);
-      await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
-      await sock.sendMessage(
-        chatId,
-        {
-          text: 'Ukuran video terlalu besar (>100MB) untuk dikirim ke WhatsApp, tetapi file sudah dicadangkan ke Google Drive.',
-        },
-        { quoted: msg }
-      );
+      scheduleDriveBackup(fileBuffer, filePath, fileName, 'video/mp4', sock, chatId, msg, true);
       return { status: 'skipped' };
     }
 
-    const fileBuffer = fs.readFileSync(filePath);
-    const sendResult = await sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg);
+    await sendVideoMedia(sock, chatId, fileBuffer, title, fileName, msg);
 
-    if (sendResult?.status !== 'skipped') {
-      await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
-    }
+    scheduleDriveBackup(fileBuffer, filePath, fileName, 'video/mp4');
 
     logger.info({ jid: chatId, fileName }, 'Media terkirim ke WhatsApp');
     return { status: 'sent' };
   } catch (err) {
+    cleanupFile(filePath);
     const friendly = buildFriendlyError(err);
     if (friendly) {
       await sock.sendMessage(chatId, { text: friendly }, { quoted: msg });
       return { status: 'skipped' };
     }
     throw err;
-  } finally {
-    if (filePath) cleanupFile(filePath);
   }
 }
 
