@@ -89,14 +89,28 @@ function runSpawn(command, args, { timeoutMs = 300000, onLog } = {}) {
   });
 }
 
+function cleanUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl.trim());
+    parsed.searchParams.delete('si');
+    parsed.searchParams.delete('igsh');
+    parsed.searchParams.delete('feature');
+    return parsed.toString();
+  } catch {
+    return rawUrl.trim();
+  }
+}
+
 function buildYtdlpBaseArgs() {
   return [
     '--force-ipv4',
     '--no-warnings',
     '--no-playlist',
-    '--socket-timeout', '30',
+    '--socket-timeout', '20',
     '--retries', '3',
-    '--extractor-args', 'youtube:player_client=android_creator,ios;player_skip=configs,webpage',
+    '--user-agent',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    '--extractor-args', 'youtube:player_client=ios,web',
   ];
 }
 
@@ -110,7 +124,7 @@ async function getMediaInfo(url) {
 async function downloadWithYtdlp(url, outputPath) {
   const ytdlpArgs = [
     ...buildYtdlpBaseArgs(),
-    '-f', 'b[ext=mp4][height<=720]/best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best',
+    '-f', 'best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best',
     '--merge-output-format', 'mp4',
     '-o', outputPath,
     url,
@@ -435,7 +449,7 @@ export async function handleDownloader(sock, msg, args) {
     return;
   }
 
-  const url = args.trim();
+  const url = cleanUrl(args);
 
   if (!isSupportedUrl(url)) {
     await sock.sendMessage(chatId, {
