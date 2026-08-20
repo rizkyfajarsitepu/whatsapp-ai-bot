@@ -102,22 +102,44 @@ function cleanUrl(rawUrl) {
 }
 
 async function downloadWithYtdlp(url, outputBasePath) {
-  const ytdlpArgs = [
+  const isYouTube = /youtu\.?be/i.test(url);
+  const isInstagram = /instagram\.com/i.test(url);
+  const isTikTok = /tiktok\.com/i.test(url);
+
+  const args = [
     '--force-ipv4',
     '--no-warnings',
     '--no-playlist',
     '--socket-timeout', '60',
     '--retries', '5',
     '--match-filter', `duration <= ${MAX_DURATION_SECONDS}`,
-    '--extractor-args', 'youtube:player_client=mweb,android',
-    '-f', 'best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best',
     '--merge-output-format', 'mp4',
-    '-o', `${outputBasePath}_%(title).100B [%(id)s].%(ext)s`,
-    cleanUrl(url),
   ];
 
+  if (isYouTube) {
+    args.push(
+      '--extractor-args', 'youtube:player_client=mweb,android',
+      '-f', 'best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best'
+    );
+  } else if (isInstagram) {
+    args.push(
+      '--user-agent',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+      '-f', 'best/bestvideo+bestaudio'
+    );
+  } else if (isTikTok) {
+    args.push(
+      '--user-agent', USER_AGENT,
+      '-f', 'best/bestvideo+bestaudio'
+    );
+  } else {
+    args.push('-f', 'best[ext=mp4]/best');
+  }
+
+  args.push('-o', `${outputBasePath}_%(title).100B [%(id)s].%(ext)s`, cleanUrl(url));
+
   const start = Date.now();
-  await runSpawn(YTDLP_PATH, ytdlpArgs, {
+  await runSpawn(YTDLP_PATH, args, {
     timeoutMs: 300000,
     onLog: (chunk) => {
       const line = String(chunk).trim();
@@ -126,19 +148,25 @@ async function downloadWithYtdlp(url, outputBasePath) {
   });
 
   const baseName = path.basename(outputBasePath);
-  const candidates = fs
-    .readdirSync(TEMP_DIR)
-    .filter((f) => f.startsWith(`${baseName}_`) && f.endsWith('.mp4'));
+  let found = null;
+  for (const f of fs.readdirSync(TEMP_DIR)) {
+    if (!f.startsWith(`${baseName}_`) || f.endsWith('.part') || /\.f\d+\./.test(f)) continue;
+    const full = path.join(TEMP_DIR, f);
+    const size = fs.statSync(full).size;
+    if (size > 0 && (!found || size > found.size)) {
+      found = { filePath: full, size };
+    }
+  }
 
-  if (candidates.length === 0) {
+  if (!found) {
     throw new Error('File hasil download tidak ditemukan.');
   }
 
-  const filePath = path.join(TEMP_DIR, candidates[candidates.length - 1]);
+  const filePath = found.filePath;
   const title = path
     .basename(filePath)
     .slice(baseName.length + 1)
-    .replace(/ \[[^\]]+\]\.mp4$/, '');
+    .replace(/ \[[^\]]+\]\.[^.]+$/, '');
 
   logger.info(
     { seconds: ((Date.now() - start) / 1000).toFixed(1), filePath },
@@ -291,38 +319,22 @@ function buildFriendlyError(err) {
   return null;
 }
 
-async function downloadTikTok(url) {
+async function downloadTikTokMeta(url) {
   const { data } = await axios.get('https://tikwm.com/api/', {
     params: { url, hd: 1 },
     timeout: 30000,
     headers: { 'User-Agent': USER_AGENT },
   });
 
-  if (data?.code !== 0 || !data?.data?.play) {
-    throw new Error(data?.msg || 'Gagal mendapatkan URL video TikTok');
+  if (data?.code !== 0) {
+    throw new Error(data?.msg || 'Gagal mendapatkan metadata TikTok');
   }
 
   return {
-    title: data.data.title || 'TikTok Video',
-    uploader: data.data.author?.nickname || data.data.author?.unique_id || 'TikTok',
-    videoUrl: data.data.play,
-    duration: data.data.duration,
+    title: data.data?.title || 'TikTok Video',
+    uploader: data.data?.author?.nickname || data.data?.author?.unique_id || 'TikTok',
+    duration: data.data?.duration,
   };
-}
-
-async function downloadDirectVideo(url, outputPath) {
-  const videoResp = await axios.get(url, {
-    responseType: 'stream',
-    timeout: 120000,
-    headers: { 'User-Agent': USER_AGENT },
-  });
-
-  const writer = fs.createWriteStream(outputPath);
-  videoResp.data.pipe(writer);
-  await new Promise((resolve, reject) => {
-    writer.on('finish', resolve);
-    writer.on('error', reject);
-  });
 }
 
 async function runYtdlpFlow(sock, chatId, url, msg) {
@@ -331,9 +343,17 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
   const fileName = `${platform}_${date}_${time}.mp4`;
   const outputBasePath = path.join(TEMP_DIR, `${Date.now()}`);
 
+  let statusText = 'Mengunduh video. Harap tunggu...';
+  if (isTikTokUrl(url)) {
+    try {
+      const tikInfo = await downloadTikTokMeta(url);
+      statusText = `Mengunduh: *${tikInfo.title}*\nCreator: ${tikInfo.uploader}\nHarap tunggu...`;
+    } catch {}
+  }
+
   await sock.sendMessage(
     chatId,
-    { text: 'Mengunduh video. Harap tunggu...' },
+    { text: statusText },
     { quoted: msg }
   );
 
@@ -382,45 +402,6 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
   }
 }
 
-async function runTikTokApiFlow(sock, chatId, url, msg) {
-  const tikInfo = await downloadTikTok(url);
-  const { date, time } = getWIBTimestamp();
-  const fileName = `TikTok_${date}_${time}.mp4`;
-  const outputPath = path.join(TEMP_DIR, `${Date.now()}.mp4`);
-
-  try {
-    if (Number(tikInfo.duration) > MAX_DURATION_SECONDS) {
-      await sock.sendMessage(
-        chatId,
-        { text: '⚠️ Durasi video terlalu panjang. Maksimal durasi adalah 10 menit.' },
-        { quoted: msg }
-      );
-      return { status: 'skipped' };
-    }
-
-    await sock.sendMessage(
-      chatId,
-      { text: `Mengunduh: *${tikInfo.title}*\nCreator: ${tikInfo.uploader}\nHarap tunggu...` },
-      { quoted: msg }
-    );
-
-    await downloadDirectVideo(tikInfo.videoUrl, outputPath);
-
-    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
-      throw new Error('File hasil download kosong atau tidak ditemukan.');
-    }
-
-    const fileBuffer = fs.readFileSync(outputPath);
-    const sendResult = await sendVideoMedia(sock, chatId, fileBuffer, tikInfo.title, fileName, msg);
-    if (sendResult?.status !== 'skipped') {
-      await uploadMediaToDrive(fileBuffer, fileName, 'video/mp4');
-    }
-    return { status: 'sent' };
-  } finally {
-    cleanupFile(outputPath);
-  }
-}
-
 export async function handleDownloader(sock, msg, args) {
   const chatId = msg.key.remoteJid;
 
@@ -441,27 +422,6 @@ export async function handleDownloader(sock, msg, args) {
   }
 
   await sock.sendMessage(chatId, { react: { text: '⏳', key: msg.key } });
-
-  if (isTikTokUrl(url)) {
-    try {
-      const result = await runTikTokApiFlow(sock, chatId, url, msg);
-      if (result?.status === 'sent' || result?.status === 'skipped') return;
-    } catch (tikErr) {
-      logger.warn({ err: tikErr.message }, 'TikTok API gagal, fallback ke yt-dlp');
-    }
-
-    try {
-      const result = await runYtdlpFlow(sock, chatId, url, msg);
-      if (result?.status === 'sent' || result?.status === 'skipped') return;
-    } catch (ytErr) {
-      logger.error({ err: ytErr.message }, 'yt-dlp TikTok gagal');
-    }
-
-    await sock.sendMessage(chatId, {
-      text: 'Gagal mengunduh TikTok. Coba lagi nanti ya.',
-    });
-    return;
-  }
 
   try {
     await runYtdlpFlow(sock, chatId, url, msg);
