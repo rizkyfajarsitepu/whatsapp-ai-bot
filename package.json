@@ -21,7 +21,6 @@
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^2.11.0",
-    "@sasmeee/igdl": "github:sasmeee/igdl",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "axios": "^1.18.1",
     "better-sqlite3": "^12.11.1",
@@ -35,7 +34,6 @@
     "form-data": "^4.0.6",
     "google-tts-api": "^2.0.2",
     "googleapis": "^174.0.1",
-    "instagram-url-direct": "^2.0.7",
     "mathjs": "^15.2.0",
     "node-cron": "^4.6.0",
     "pdf-lib": "^1.17.1",

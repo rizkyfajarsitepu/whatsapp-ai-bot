@@ -2,8 +2,6 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
-import igdl from '@sasmeee/igdl';
-import { instagramGetUrl } from 'instagram-url-direct';
 import logger from '../utils/logger.js';
 import { config } from '../config/settings.js';
 import { uploadToDrive, normalizeFolderId } from '../utils/googleDrive.js';
@@ -124,10 +122,14 @@ async function downloadWithYtdlp(url, outputBasePath) {
       '-f', 'best[ext=mp4][height<=720]/bestvideo[height<=720]+bestaudio/best'
     );
   } else if (isInstagram) {
+    const igSession = process.env.INSTAGRAM_SESSION_ID;
+    if (igSession) {
+      args.push('--add-header', `Cookie: sessionid=${igSession.trim()}`);
+    }
     args.push(
       '--user-agent',
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-      '-f', 'best/bestvideo+bestaudio'
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      '-f', 'best[ext=mp4]/best'
     );
   } else if (isTikTok) {
     args.push(
@@ -340,65 +342,6 @@ async function downloadTikTokMeta(url) {
   };
 }
 
-async function getInstagramVideoUrl(url) {
-  const cleanUrl = url.split('?')[0];
-
-  try {
-    const data = await igdl(cleanUrl);
-    if (data && data.length > 0 && data[0].download_link) {
-      return data[0].download_link;
-    }
-  } catch (e) {
-    logger.debug({ err: e.message }, 'igdl gagal, lanjut ke instagram-url-direct');
-  }
-
-  try {
-    const result = await instagramGetUrl(cleanUrl);
-    if (result?.url_list?.length > 0) {
-      return result.url_list[0];
-    }
-  } catch (e) {
-    logger.debug({ err: e.message }, 'instagram-url-direct gagal');
-  }
-
-  throw new Error('Gagal mengekstrak direct link video Instagram.');
-}
-
-async function downloadDirectStream(url, outputPath) {
-  const videoResp = await axios.get(url, {
-    responseType: 'stream',
-    timeout: 120000,
-    maxRedirects: 5,
-    headers: { 'User-Agent': USER_AGENT, Referer: 'https://www.instagram.com/' },
-  });
-
-  const writer = fs.createWriteStream(outputPath);
-  videoResp.data.pipe(writer);
-  await new Promise((resolve, reject) => {
-    writer.on('finish', resolve);
-    writer.on('error', reject);
-    videoResp.data.on('error', reject);
-  });
-}
-
-async function tryDownloadInstagram(url, outputBasePath) {
-  try {
-    const videoUrl = await getInstagramVideoUrl(url);
-    const outputPath = path.join(TEMP_DIR, `${path.basename(outputBasePath)}_ig.mp4`);
-    await downloadDirectStream(videoUrl, outputPath);
-
-    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
-      throw new Error('File hasil unduhan Instagram kosong.');
-    }
-
-    logger.info({ outputPath }, 'Instagram direct download selesai');
-    return { filePath: outputPath, title: 'Instagram Video' };
-  } catch (err) {
-    logger.warn({ err: err.message }, 'Scraper Instagram gagal, fallback ke yt-dlp');
-    return null;
-  }
-}
-
 async function runYtdlpFlow(sock, chatId, url, msg) {
   const { date, time } = getWIBTimestamp();
   const platform = getPlatformLabel(url);
@@ -421,21 +364,9 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
 
   let filePath = null;
   try {
-    let title = 'Video';
-
-    if (isInstagramUrl(url)) {
-      const insta = await tryDownloadInstagram(url, outputBasePath);
-      if (insta) {
-        filePath = insta.filePath;
-        title = insta.title;
-      }
-    }
-
-    if (!filePath) {
-      const result = await downloadWithYtdlp(url, outputBasePath);
-      filePath = result.filePath;
-      title = result.title || 'Video';
-    }
+    const result = await downloadWithYtdlp(url, outputBasePath);
+    filePath = result.filePath;
+    const title = result.title || 'Video';
 
     if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
       throw new Error('File hasil download kosong atau tidak ditemukan.');
