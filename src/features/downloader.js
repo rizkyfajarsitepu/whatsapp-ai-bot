@@ -337,6 +337,109 @@ async function downloadTikTokMeta(url) {
   };
 }
 
+function pickInstagramVideo(medias) {
+  if (!Array.isArray(medias)) return null;
+  const hit = medias.find(
+    (m) => m && m.url && /video/i.test(String(m.type || m.extension || ''))
+  );
+  return hit ? hit.url : null;
+}
+
+function parseInstagramApiResult(data) {
+  if (!data) return null;
+  const videoUrl = pickInstagramVideo(data?.medias || data?.media);
+  if (!videoUrl) return null;
+  return { videoUrl, title: data?.title || 'Instagram Video' };
+}
+
+function parseSnapInstaResult(data) {
+  if (!data || data?.status !== 'ok') return null;
+  const inner = data?.data || data;
+  const videoUrl = inner?.video || pickInstagramVideo(inner?.media);
+  if (!videoUrl) return null;
+  return { videoUrl, title: inner?.title || 'Instagram Video' };
+}
+
+async function scrapeInstagramDirect(url) {
+  const errors = [];
+
+  try {
+    const { data } = await axios.post(
+      'https://instasupersave.com/api/ig',
+      new URLSearchParams({ url }),
+      {
+        timeout: 30000,
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+    const result = parseInstagramApiResult(data);
+    if (result) return result;
+    errors.push('instasupersave: respons tanpa video');
+  } catch (err) {
+    errors.push(`instasupersave: ${err.message}`);
+  }
+
+  try {
+    const { data } = await axios.post(
+      'https://snapinsta.app/api/ajaxSearch?lang=id',
+      new URLSearchParams({ data: url }),
+      {
+        timeout: 30000,
+        headers: {
+          'User-Agent': USER_AGENT,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+    const result = parseSnapInstaResult(data);
+    if (result) return result;
+    errors.push('snapinsta: respons tanpa video');
+  } catch (err) {
+    errors.push(`snapinsta: ${err.message}`);
+  }
+
+  throw new Error(`Semua scraper Instagram gagal: ${errors.join('; ')}`);
+}
+
+async function downloadDirectStream(url, outputPath) {
+  const videoResp = await axios.get(url, {
+    responseType: 'stream',
+    timeout: 120000,
+    maxRedirects: 5,
+    headers: { 'User-Agent': USER_AGENT, Referer: 'https://www.instagram.com/' },
+  });
+
+  const writer = fs.createWriteStream(outputPath);
+  videoResp.data.pipe(writer);
+  await new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+    videoResp.data.on('error', reject);
+  });
+}
+
+async function tryDownloadInstagram(url, outputBasePath) {
+  try {
+    const direct = await scrapeInstagramDirect(url);
+    const outputPath = path.join(TEMP_DIR, `${path.basename(outputBasePath)}_ig.mp4`);
+    await downloadDirectStream(direct.videoUrl, outputPath);
+
+    if (!fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+      throw new Error('File hasil unduhan Instagram kosong.');
+    }
+
+    logger.info({ outputPath }, 'Instagram direct download selesai');
+    return { filePath: outputPath, title: direct.title || 'Instagram Video' };
+  } catch (err) {
+    logger.warn({ err: err.message }, 'Scraper Instagram gagal, fallback ke yt-dlp');
+    return null;
+  }
+}
+
 async function runYtdlpFlow(sock, chatId, url, msg) {
   const { date, time } = getWIBTimestamp();
   const platform = getPlatformLabel(url);
@@ -359,9 +462,21 @@ async function runYtdlpFlow(sock, chatId, url, msg) {
 
   let filePath = null;
   try {
-    const result = await downloadWithYtdlp(url, outputBasePath);
-    filePath = result.filePath;
-    const title = result.title || 'Video';
+    let title = 'Video';
+
+    if (isInstagramUrl(url)) {
+      const insta = await tryDownloadInstagram(url, outputBasePath);
+      if (insta) {
+        filePath = insta.filePath;
+        title = insta.title;
+      }
+    }
+
+    if (!filePath) {
+      const result = await downloadWithYtdlp(url, outputBasePath);
+      filePath = result.filePath;
+      title = result.title || 'Video';
+    }
 
     if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
       throw new Error('File hasil download kosong atau tidak ditemukan.');
