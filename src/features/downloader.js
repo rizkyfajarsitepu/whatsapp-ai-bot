@@ -129,7 +129,8 @@ async function downloadWithYtdlp(url, outputBasePath) {
     args.push(
       '--user-agent',
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      '-f', 'best[ext=mp4]/best'
+      '-f', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
+      '--recode-video', 'mp4'
     );
   } else if (isTikTok) {
     args.push(
@@ -140,7 +141,7 @@ async function downloadWithYtdlp(url, outputBasePath) {
     args.push('-f', 'best[ext=mp4]/best');
   }
 
-  args.push('-o', `${outputBasePath}_%(title).100B [%(id)s].%(ext)s`, cleanUrl(url));
+  args.push('-o', `${outputBasePath}_%(title).50s.%(ext)s`, cleanUrl(url));
 
   const start = Date.now();
   await runSpawn(YTDLP_PATH, args, {
@@ -152,25 +153,24 @@ async function downloadWithYtdlp(url, outputBasePath) {
   });
 
   const baseName = path.basename(outputBasePath);
-  let found = null;
-  for (const f of fs.readdirSync(TEMP_DIR)) {
-    if (!f.startsWith(`${baseName}_`) || f.endsWith('.part') || /\.f\d+\./.test(f)) continue;
-    const full = path.join(TEMP_DIR, f);
-    const size = fs.statSync(full).size;
-    if (size > 0 && (!found || size > found.size)) {
-      found = { filePath: full, size };
-    }
+  const files = fs.readdirSync(TEMP_DIR);
+  const downloaded = files.find(
+    (f) =>
+      f.startsWith(`${baseName}_`) &&
+      !f.endsWith('.part') &&
+      !/\.f\d+\./.test(f) &&
+      fs.statSync(path.join(TEMP_DIR, f)).size > 0
+  );
+
+  if (!downloaded) {
+    throw new Error('File hasil download tidak ditemukan di folder tmp.');
   }
 
-  if (!found) {
-    throw new Error('File hasil download tidak ditemukan.');
-  }
-
-  const filePath = found.filePath;
+  const filePath = path.join(TEMP_DIR, downloaded);
   const title = path
     .basename(filePath)
     .slice(baseName.length + 1)
-    .replace(/ \[[^\]]+\]\.[^.]+$/, '');
+    .replace(/\.[^.]+$/, '');
 
   logger.info(
     { seconds: ((Date.now() - start) / 1000).toFixed(1), filePath },
